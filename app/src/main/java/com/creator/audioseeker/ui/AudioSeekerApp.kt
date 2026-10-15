@@ -410,15 +410,13 @@ private fun AppHeader(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = MaterialTheme.colorScheme.onSurface)
             }
         }
-        Image(
-            painter = painterResource(R.drawable.audioseeker_brand_icon),
-            contentDescription = "AudioSeeker",
-            modifier = Modifier.size(36.dp),
-            contentScale = ContentScale.Fit,
-        )
-        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("AudioSeeker", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "AudioSeeker",
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
