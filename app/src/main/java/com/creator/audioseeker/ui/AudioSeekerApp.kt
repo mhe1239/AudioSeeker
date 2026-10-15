@@ -67,7 +67,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -78,6 +77,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -85,6 +85,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.PopupPositionProvider
 import com.creator.audioseeker.AudioTrack
 import com.creator.audioseeker.ClassificationFolder
 import com.creator.audioseeker.PlayerUiState
@@ -382,7 +387,7 @@ private fun AppHeader(
             label = if (searchOpen) "검색 닫기" else "음악 검색",
             onClick = onSearch,
             modifier = Modifier.size(48.dp),
-        ) { Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, null) }
+        ) { Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurface) }
         HelpIconButton(
             if (folderViewMode == FolderViewMode.DEVICE) "곡 목록 보기" else "기기 폴더 보기",
             onDeviceFolders,
@@ -405,8 +410,12 @@ private fun AppHeader(
                 tint = if (folderViewMode == FolderViewMode.AUTOMATIC) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
         }
-        HelpIconButton("파일 목록 새로고침", onRefresh, Modifier.size(48.dp)) { Icon(Icons.Default.Refresh, null) }
-        HelpIconButton("재생 설정", onSettings, Modifier.size(48.dp)) { Icon(Icons.Default.Settings, null) }
+        HelpIconButton("파일 목록 새로고침", onRefresh, Modifier.size(48.dp)) {
+            Icon(Icons.Default.Refresh, null, tint = MaterialTheme.colorScheme.onSurface)
+        }
+        HelpIconButton("재생 설정", onSettings, Modifier.size(48.dp)) {
+            Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.onSurface)
+        }
     }
 }
 
@@ -416,13 +425,13 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClose:
         value = query, onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
         singleLine = true, label = { Text("파일명, 크리에이터 또는 폴더 검색") },
-        leadingIcon = { Icon(Icons.Default.Search, null) },
+        leadingIcon = { Icon(Icons.Default.Search, null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
         trailingIcon = {
             HelpIconButton(
                 label = if (query.isEmpty()) "검색 닫기" else "검색어 지우기",
                 onClick = { if (query.isEmpty()) onClose() else onQueryChange("") },
             ) {
-                Icon(Icons.Default.Close, null)
+                Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
     )
@@ -690,7 +699,7 @@ private fun FocusedPlayerScreen(
     ) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             HelpIconButton("라이브러리로 돌아가기", onBack, Modifier.size(48.dp)) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = MaterialTheme.colorScheme.onSurface)
             }
             Text("현재 재생", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
             LockControl(playerState.controlsLocked, playerState.unlockMethod, onToggleLock)
@@ -820,9 +829,15 @@ private fun HelpIconButton(
     content: @Composable () -> Unit,
 ) {
     TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-        tooltip = { PlainTooltip { Text(label) } },
+        positionProvider = rememberBelowTooltipPositionProvider(),
+        tooltip = {
+            PlainTooltip(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+            ) { Text(label) }
+        },
         state = rememberTooltipState(),
+        focusable = false,
     ) {
         IconButton(
             onClick = onClick,
@@ -830,6 +845,39 @@ private fun HelpIconButton(
             enabled = enabled,
             content = content,
         )
+    }
+}
+
+@Composable
+private fun rememberBelowTooltipPositionProvider(): PopupPositionProvider {
+    val density = LocalDensity.current
+    return remember(density) {
+        val edgeMargin = with(density) { 8.dp.roundToPx() }
+        object : PopupPositionProvider {
+            override fun calculatePosition(
+                anchorBounds: IntRect,
+                windowSize: IntSize,
+                layoutDirection: LayoutDirection,
+                popupContentSize: IntSize,
+            ): IntOffset {
+                val anchorIsOnLeft = anchorBounds.left + anchorBounds.width / 2 < windowSize.width / 2
+                val requestedX = if (anchorIsOnLeft) {
+                    anchorBounds.left
+                } else {
+                    anchorBounds.right - popupContentSize.width
+                }
+                val maxX = (windowSize.width - popupContentSize.width - edgeMargin).coerceAtLeast(edgeMargin)
+                val x = requestedX.coerceIn(edgeMargin, maxX)
+
+                val belowY = anchorBounds.bottom + edgeMargin
+                val y = if (belowY + popupContentSize.height <= windowSize.height - edgeMargin) {
+                    belowY
+                } else {
+                    (anchorBounds.top - popupContentSize.height - edgeMargin).coerceAtLeast(edgeMargin)
+                }
+                return IntOffset(x, y)
+            }
+        }
     }
 }
 
