@@ -309,7 +309,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }.getOrNull()
 
     private fun createAppArtworkData(): ByteArray? = runCatching {
-        BitmapFactory.decodeResource(app.resources, R.drawable.audioseeker_brand_icon)
+        BitmapFactory.decodeResource(app.resources, R.drawable.audioseeker_fallback_artwork)
             .let(::compressArtwork)
     }.getOrNull()
 

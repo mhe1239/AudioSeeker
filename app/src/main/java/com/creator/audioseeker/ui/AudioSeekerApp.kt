@@ -752,13 +752,12 @@ private fun FocusedPlayerScreen(
         Card(
             Modifier.fillMaxWidth().aspectRatio(1f), shape = RoundedCornerShape(32.dp),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         ) {
             Image(
-                painter = painterResource(R.drawable.audioseeker_brand_icon),
-                contentDescription = "AudioSeeker 아이콘",
-                modifier = Modifier.fillMaxSize().padding(20.dp),
-                contentScale = ContentScale.Fit,
+                painter = painterResource(R.drawable.audioseeker_fallback_artwork),
+                contentDescription = "기본 앨범 아트",
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
             )
         }
         Spacer(Modifier.height(32.dp))
@@ -975,7 +974,7 @@ private fun SettingsScreen(
                 Spacer(Modifier.height(16.dp))
                 Text("잠금화면 Now Bar 앨범 아트", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    "켜면 잠금화면과 Now Bar를 열었을 때 곡의 앨범 아트를 표시합니다. 이미지가 없으면 앱 로고를 표시합니다.",
+                    "켜면 잠금화면과 Now Bar를 열었을 때 곡의 앨범 아트를 표시합니다. 이미지가 없으면 기본 앨범 아트를 표시합니다.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
