@@ -126,7 +126,7 @@ fun AudioSeekerApp(
     onSetShowLockScreenArtwork: (Boolean) -> Unit,
     classificationFolders: List<ClassificationFolder>,
     autoClassificationExtensions: Set<String>,
-    onAddClassificationFolder: (String, String) -> Unit,
+    onAddClassificationFolder: (String, String?) -> Unit,
     onRemoveClassificationFolder: (ClassificationFolder) -> Unit,
     onSetAutoClassificationExtensions: (Set<String>) -> Unit,
     onDeleteTracks: (List<AudioTrack>) -> Unit,
@@ -304,7 +304,7 @@ private fun LibraryScreen(
     }
     val headerSubtitle = when {
         selectedDeviceFolder != null -> "기기 폴더: $selectedDeviceFolder"
-        selectedClassificationFolder != null -> "자동 분류: ${selectedClassificationFolder.name}"
+        selectedClassificationFolder != null -> "${if (selectedClassificationFolder.keyword == null) "일반" else "자동 분류"}: ${selectedClassificationFolder.name}"
         folderViewMode == FolderViewMode.DEVICE -> "기기 폴더별 음악과 녹음"
         folderViewMode == FolderViewMode.AUTOMATIC -> "자동 분류 폴더"
         else -> "기기의 음악과 녹음"
@@ -516,11 +516,23 @@ private fun DeviceFolderList(folders: List<Pair<String, List<AudioTrack>>>, modi
 @Composable
 private fun SelectedClassificationFolderRow(folder: ClassificationFolder, onClear: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(Icons.Default.FilterAlt, null, tint = MaterialTheme.colorScheme.primary)
+        Icon(
+            if (folder.keyword == null) Icons.Default.Folder else Icons.Default.FilterAlt,
+            null,
+            tint = MaterialTheme.colorScheme.primary,
+        )
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("자동 분류: ${folder.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("검색어: ${folder.keyword}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                if (folder.keyword == null) "일반 폴더: ${folder.name}" else "자동 분류: ${folder.name}",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                folder.keyword?.let { "검색어: $it" } ?: "자동 추가 없음",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         TextButton(onClear) { Text("전체") }
     }
@@ -541,7 +553,7 @@ private fun ClassificationFolderList(
                 Text("자동 분류 폴더", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "생성할 때 현재 파일을 먼저 검사하고, 이후 새 파일만 필터에 맞으면 여기에 추가합니다.",
+                    "필터를 지정하면 현재 파일을 검사하고 이후 새 파일도 자동으로 분류합니다. 필터 없이 만들면 비어 있는 일반 폴더가 됩니다.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -549,14 +561,14 @@ private fun ClassificationFolderList(
                 Button(onClick = onAddFolder) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("분류 폴더 추가")
+                    Text("폴더 추가")
                 }
             }
         }
         if (folders.isEmpty()) {
             item {
                 Text(
-                    "아직 만든 자동 분류 폴더가 없습니다.",
+                    "아직 만든 폴더가 없습니다.",
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -568,13 +580,26 @@ private fun ClassificationFolderList(
                 Modifier.fillMaxWidth().clickable(role = Role.Button) { onSelectFolder(folder) }.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(Icons.Default.FilterAlt, null, tint = MaterialTheme.colorScheme.primary)
+                Icon(
+                    if (folder.keyword == null) Icons.Default.Folder else Icons.Default.FilterAlt,
+                    null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
                 Spacer(Modifier.width(16.dp))
                 Column(Modifier.weight(1f)) {
                     Text(folder.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text("검색어: ${folder.keyword} · ${matchedCount}개 파일", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        folder.keyword?.let { "검색어: $it · ${matchedCount}개 파일" }
+                            ?: "일반 폴더 · ${matchedCount}개 파일",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                HelpIconButton("${folder.name} 자동 분류 폴더 삭제", { onRemoveFolder(folder) }, Modifier.size(48.dp)) {
+                HelpIconButton(
+                    "${folder.name} ${if (folder.keyword == null) "일반" else "자동 분류"} 폴더 삭제",
+                    { onRemoveFolder(folder) },
+                    Modifier.size(48.dp),
+                ) {
                     Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }
             }
@@ -604,7 +629,7 @@ private fun EmptySearchResult(
         Spacer(Modifier.height(6.dp))
         val message = when {
             query.isNotBlank() -> "\"$query\"와 일치하는 음악이나 녹음이 없습니다."
-            selectedClassificationFolder != null -> "${selectedClassificationFolder.name} 자동 분류 폴더에 표시할 파일이 없습니다."
+            selectedClassificationFolder != null -> "${selectedClassificationFolder.name} ${if (selectedClassificationFolder.keyword == null) "일반" else "자동 분류"} 폴더에 표시할 파일이 없습니다."
             selectedDeviceFolder != null -> "$selectedDeviceFolder 기기 폴더에 표시할 파일이 없습니다."
             else -> "다른 검색어나 폴더를 선택해 보세요."
         }
@@ -1092,20 +1117,21 @@ private fun SettingsScreen(
 @Composable
 private fun ClassificationFolderDialog(
     selectedExtensions: Set<String>,
-    onAdd: (String, String) -> Unit,
+    onAdd: (String, String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var keyword by remember { mutableStateOf("") }
-    val canSave = name.isNotBlank() && keyword.isNotBlank()
+    val isAutomaticFolder = keyword.isNotBlank()
+    val canSave = name.isNotBlank()
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("자동 분류 폴더 추가") },
+        title = { Text("폴더 추가") },
         text = {
             Column {
                 Text(
-                    "파일을 옮기지 않습니다. 생성하면 현재 파일을 먼저 검사하고, 이후 새 파일만 이 필터로 분류합니다.",
+                    "파일을 옮기지 않습니다. 검색어를 입력하면 자동 분류 폴더가 되고, 비워 두면 파일을 자동으로 넣지 않는 일반 폴더가 됩니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1123,23 +1149,31 @@ private fun ClassificationFolderDialog(
                     onValueChange = { keyword = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("파일명 필터 검색어") },
-                    supportingText = { Text("예: 회의") },
+                    label = { Text("파일명 필터 검색어 (선택)") },
+                    supportingText = { Text("예: 회의 · 비워 두면 일반 폴더") },
                 )
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    if (selectedExtensions.isEmpty()) {
-                        "현재 자동 분류 파일 형식이 선택되지 않았습니다. 설정에서 선택해 주세요."
-                    } else {
-                        "적용 형식: ${selectedExtensions.sorted().joinToString(separator = ", ") { ".${it.lowercase()}" }}"
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                if (isAutomaticFolder) {
+                    Text(
+                        if (selectedExtensions.isEmpty()) {
+                            "현재 자동 분류 파일 형식이 선택되지 않았습니다. 설정에서 선택해 주세요."
+                        } else {
+                            "적용 형식: ${selectedExtensions.sorted().joinToString(separator = ", ") { ".${it.lowercase()}" }}"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    Text(
+                        "일반 폴더에는 파일이 자동으로 추가되지 않습니다.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         },
         confirmButton = {
-            Button(onClick = { onAdd(name, keyword) }, enabled = canSave) { Text("추가") }
+            Button(onClick = { onAdd(name, keyword.takeIf { it.isNotBlank() }) }, enabled = canSave) { Text("추가") }
         },
         dismissButton = { TextButton(onDismiss) { Text("취소") } },
     )

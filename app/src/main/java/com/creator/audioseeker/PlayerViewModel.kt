@@ -222,17 +222,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun addClassificationFolder(name: String, keyword: String) {
+    fun addClassificationFolder(name: String, keyword: String?) {
         val trimmedName = name.trim()
-        val trimmedKeyword = keyword.trim()
-        if (trimmedName.isBlank() || trimmedKeyword.isBlank()) return
+        val trimmedKeyword = keyword?.trim()?.takeIf { it.isNotBlank() }
+        if (trimmedName.isBlank()) return
 
         val filesAtCreation = tracks.map { it.id }.toSet()
         classificationFolders = classificationFolders + ClassificationFolder(
             id = UUID.randomUUID().toString(),
             name = trimmedName,
             keyword = trimmedKeyword,
-            trackIds = tracks.filter { it.matchesClassificationKeyword(trimmedKeyword) }.map { it.id }.toSet(),
+            trackIds = trimmedKeyword?.let { filter ->
+                tracks.filter { it.matchesClassificationKeyword(filter) }.map { it.id }.toSet()
+            } ?: emptySet(),
             examinedTrackIds = filesAtCreation,
             isInitialized = true,
         )
@@ -451,8 +453,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val item = jsonArray.optJSONObject(index) ?: continue
                 val id = item.optString("id").trim()
                 val name = item.optString("name").trim()
-                val keyword = item.optString("keyword").trim()
-                if (id.isNotBlank() && name.isNotBlank() && keyword.isNotBlank()) {
+                val keyword = item.optString("keyword").trim().takeIf { it.isNotBlank() }
+                if (id.isNotBlank() && name.isNotBlank()) {
                     add(
                         ClassificationFolder(
                             id = id,
@@ -490,6 +492,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (classificationFolders.isEmpty()) return
 
         val updatedFolders = classificationFolders.map { folder ->
+            val keyword = folder.keyword ?: return@map folder
             val tracksToCheck = if (folder.isInitialized) {
                 loadedTracks.filter { it.id !in folder.examinedTrackIds }
             } else {
@@ -500,7 +503,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             folder.copy(
                 trackIds = folder.trackIds + tracksToCheck
-                    .filter { it.matchesClassificationKeyword(folder.keyword) }
+                    .filter { it.matchesClassificationKeyword(keyword) }
                     .map { it.id },
                 examinedTrackIds = folder.examinedTrackIds + tracksToCheck.map { it.id },
                 isInitialized = true,

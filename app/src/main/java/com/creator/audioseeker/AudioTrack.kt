@@ -17,7 +17,7 @@ enum class ThemePreference {
 data class ClassificationFolder(
     val id: String,
     val name: String,
-    val keyword: String,
+    val keyword: String? = null,
     val trackIds: Set<Long> = emptySet(),
     val examinedTrackIds: Set<Long> = emptySet(),
     val isInitialized: Boolean = false,
