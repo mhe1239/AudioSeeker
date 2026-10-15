@@ -66,6 +66,8 @@ class MainActivity : ComponentActivity() {
                     onSkipNext = playerViewModel::skipToNext,
                     onSetSkipSeconds = playerViewModel::setSkipSeconds,
                     onSetPlaybackSpeed = playerViewModel::setPlaybackSpeed,
+                    onToggleShuffle = playerViewModel::toggleShuffle,
+                    onCycleRepeatMode = playerViewModel::cycleRepeatMode,
                     onSetControlsLocked = playerViewModel::setControlsLocked,
                     onSetUnlockMethod = playerViewModel::setUnlockMethod,
                     themePreference = playerViewModel.themePreference,

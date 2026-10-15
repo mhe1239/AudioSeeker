@@ -44,8 +44,11 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.AlertDialog
@@ -94,6 +97,7 @@ import com.creator.audioseeker.AudioTrack
 import com.creator.audioseeker.ClassificationFolder
 import com.creator.audioseeker.PlayerUiState
 import com.creator.audioseeker.PlayerViewModel
+import com.creator.audioseeker.PlaybackRepeatMode
 import com.creator.audioseeker.R
 import com.creator.audioseeker.ThemePreference
 import com.creator.audioseeker.UnlockMethod
@@ -110,7 +114,7 @@ fun AudioSeekerApp(
     tracks: List<AudioTrack>,
     playerState: PlayerUiState,
     onRequestAudioPermission: () -> Unit,
-    onPlayTrack: (AudioTrack) -> Unit,
+    onPlayTrack: (AudioTrack, List<AudioTrack>) -> Unit,
     onTogglePlayback: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onSeekBy: (Int) -> Unit,
@@ -118,6 +122,8 @@ fun AudioSeekerApp(
     onSkipNext: () -> Unit,
     onSetSkipSeconds: (Int) -> Unit,
     onSetPlaybackSpeed: (Float) -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit,
     onSetControlsLocked: (Boolean) -> Unit,
     onSetUnlockMethod: (UnlockMethod) -> Unit,
     themePreference: ThemePreference,
@@ -165,6 +171,8 @@ fun AudioSeekerApp(
                     onSeekBy = onSeekBy,
                     onSkipPrevious = onSkipPrevious,
                     onSkipNext = onSkipNext,
+                    onToggleShuffle = onToggleShuffle,
+                    onCycleRepeatMode = onCycleRepeatMode,
                     onToggleLock = { onSetControlsLocked(!playerState.controlsLocked) },
                 )
             } else if (settingsOpen) {
@@ -190,6 +198,8 @@ fun AudioSeekerApp(
                     onSeekBy = onSeekBy,
                     onSkipPrevious = onSkipPrevious,
                     onSkipNext = onSkipNext,
+                    onToggleShuffle = onToggleShuffle,
+                    onCycleRepeatMode = onCycleRepeatMode,
                     onToggleLock = { onSetControlsLocked(!playerState.controlsLocked) },
                 )
             } else {
@@ -236,6 +246,8 @@ fun AudioSeekerApp(
                     onSeekBy = onSeekBy,
                     onSkipPrevious = onSkipPrevious,
                     onSkipNext = onSkipNext,
+                    onToggleShuffle = onToggleShuffle,
+                    onCycleRepeatMode = onCycleRepeatMode,
                     onToggleLock = { onSetControlsLocked(!playerState.controlsLocked) },
                 )
             }
@@ -279,10 +291,11 @@ private fun LibraryScreen(
     onClearClassificationFolder: () -> Unit,
     onOpenClassificationEditor: () -> Unit,
     onRemoveClassificationFolder: (ClassificationFolder) -> Unit,
-    onPlayTrack: (AudioTrack) -> Unit, onRequestDeleteTrack: (AudioTrack) -> Unit,
+    onPlayTrack: (AudioTrack, List<AudioTrack>) -> Unit, onRequestDeleteTrack: (AudioTrack) -> Unit,
     onRefresh: () -> Unit, onSettings: () -> Unit, onOpenFocus: () -> Unit,
     onTogglePlayback: () -> Unit, onSeekTo: (Long) -> Unit, onSeekBy: (Int) -> Unit,
-    onSkipPrevious: () -> Unit, onSkipNext: () -> Unit, onToggleLock: () -> Unit,
+    onSkipPrevious: () -> Unit, onSkipNext: () -> Unit, onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit, onToggleLock: () -> Unit,
 ) {
     val searchResults = remember(tracks, searchQuery) {
         tracks.filter { track ->
@@ -367,7 +380,7 @@ private fun LibraryScreen(
                             track = track,
                             isCurrent = track.id == playerState.currentTrackId,
                             selectionEnabled = !playerState.controlsLocked,
-                            onPlay = { onPlayTrack(track) },
+                            onPlay = { onPlayTrack(track, displayedTracks) },
                             onDelete = { onRequestDeleteTrack(track) },
                         )
                     }
@@ -376,7 +389,9 @@ private fun LibraryScreen(
             PlayerPanel(
                 track = currentTrack, playerState = playerState, compact = isCompactHeight, onOpenFocus = onOpenFocus,
                 onTogglePlayback = onTogglePlayback, onSeekTo = onSeekTo, onSeekBy = onSeekBy,
-                onSkipPrevious = onSkipPrevious, onSkipNext = onSkipNext, onToggleLock = onToggleLock,
+                onSkipPrevious = onSkipPrevious, onSkipNext = onSkipNext,
+                onToggleShuffle = onToggleShuffle, onCycleRepeatMode = onCycleRepeatMode,
+                onToggleLock = onToggleLock,
             )
         }
     }
@@ -731,7 +746,8 @@ private fun TrackRow(
 private fun PlayerPanel(
     track: AudioTrack?, playerState: PlayerUiState, compact: Boolean, onOpenFocus: () -> Unit,
     onTogglePlayback: () -> Unit, onSeekTo: (Long) -> Unit, onSeekBy: (Int) -> Unit,
-    onSkipPrevious: () -> Unit, onSkipNext: () -> Unit, onToggleLock: () -> Unit,
+    onSkipPrevious: () -> Unit, onSkipNext: () -> Unit, onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit, onToggleLock: () -> Unit,
 ) {
     Card(
         Modifier.fillMaxWidth().navigationBarsPadding(),
@@ -753,6 +769,7 @@ private fun PlayerPanel(
             if (playerState.controlsLocked) LockHint(playerState.unlockMethod)
             PlaybackProgress(track != null, playerState, onSeekTo)
             PlaybackControls(track != null, playerState, onTogglePlayback, onSeekBy, onSkipPrevious, onSkipNext)
+            if (!compact) PlaybackModeControls(playerState, onToggleShuffle, onCycleRepeatMode)
         }
     }
 }
@@ -761,7 +778,8 @@ private fun PlayerPanel(
 private fun FocusedPlayerScreen(
     track: AudioTrack, playerState: PlayerUiState, onBack: () -> Unit,
     onTogglePlayback: () -> Unit, onSeekTo: (Long) -> Unit, onSeekBy: (Int) -> Unit,
-    onSkipPrevious: () -> Unit, onSkipNext: () -> Unit, onToggleLock: () -> Unit,
+    onSkipPrevious: () -> Unit, onSkipNext: () -> Unit, onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit, onToggleLock: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
     Column(
@@ -796,6 +814,7 @@ private fun FocusedPlayerScreen(
         PlaybackProgress(true, playerState, onSeekTo)
         Spacer(Modifier.height(6.dp))
         PlaybackControls(true, playerState, onTogglePlayback, onSeekBy, onSkipPrevious, onSkipNext)
+        PlaybackModeControls(playerState, onToggleShuffle, onCycleRepeatMode)
         if (playerState.controlsLocked) {
             LockHint(playerState.unlockMethod)
         }
@@ -837,6 +856,60 @@ private fun PlaybackControls(
         PlayerButton(if (playerState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, if (playerState.isPlaying) "일시정지" else "재생", trackAvailable, true, onTogglePlayback)
         PlayerButton(Icons.Default.FastForward, "${playerState.skipSeconds}초 앞으로", trackAvailable && !playerState.controlsLocked, onClick = { onSeekBy(playerState.skipSeconds) })
         PlayerButton(Icons.Default.SkipNext, "다음 곡", trackAvailable && !playerState.controlsLocked, onClick = onSkipNext)
+    }
+}
+
+@Composable
+private fun PlaybackModeControls(
+    playerState: PlayerUiState,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().heightIn(min = 48.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PlaybackModeButton(
+            icon = Icons.Default.Shuffle,
+            label = if (playerState.shuffleEnabled) "셔플 켜짐" else "셔플 꺼짐",
+            selected = playerState.shuffleEnabled,
+            enabled = !playerState.controlsLocked,
+            onClick = onToggleShuffle,
+        )
+        PlaybackModeButton(
+            icon = if (playerState.repeatMode == PlaybackRepeatMode.TRACK_REPEAT) Icons.Default.RepeatOne else Icons.Default.Repeat,
+            label = playerState.repeatMode.repeatLabel(),
+            selected = playerState.repeatMode != PlaybackRepeatMode.PLAYLIST_ONCE,
+            enabled = !playerState.controlsLocked,
+            onClick = onCycleRepeatMode,
+        )
+    }
+}
+
+@Composable
+private fun PlaybackModeButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    HelpIconButton(label, onClick, Modifier.heightIn(min = 48.dp), enabled) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                icon,
+                null,
+                Modifier.size(24.dp),
+                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
 
@@ -973,6 +1046,8 @@ private fun SettingsScreen(
     onSeekBy: (Int) -> Unit,
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit,
     onToggleLock: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
@@ -1108,6 +1183,8 @@ private fun SettingsScreen(
                 onSeekBy = onSeekBy,
                 onSkipPrevious = onSkipPrevious,
                 onSkipNext = onSkipNext,
+                onToggleShuffle = onToggleShuffle,
+                onCycleRepeatMode = onCycleRepeatMode,
                 onToggleLock = onToggleLock,
             )
         }
@@ -1189,6 +1266,12 @@ private fun ThemePreference.settingsLabel(): String = when (this) {
     ThemePreference.DARK -> "청록 다크 모드"
     ThemePreference.STANDARD_DARK -> "표준 다크 모드"
     ThemePreference.LIGHT -> "라이트 모드"
+}
+
+private fun PlaybackRepeatMode.repeatLabel(): String = when (this) {
+    PlaybackRepeatMode.PLAYLIST_ONCE -> "목록 1회 재생"
+    PlaybackRepeatMode.PLAYLIST_REPEAT -> "목록 반복"
+    PlaybackRepeatMode.TRACK_REPEAT -> "한 곡 반복"
 }
 
 private fun UnlockMethod.unlockActionLabel(): String = when (this) {

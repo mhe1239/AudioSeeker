@@ -14,6 +14,12 @@ enum class ThemePreference {
     LIGHT,
 }
 
+enum class PlaybackRepeatMode {
+    PLAYLIST_ONCE,
+    PLAYLIST_REPEAT,
+    TRACK_REPEAT,
+}
+
 data class ClassificationFolder(
     val id: String,
     val name: String,
@@ -40,6 +46,8 @@ data class PlayerUiState(
     val durationMs: Long = 0L,
     val skipSeconds: Int = 10,
     val playbackSpeed: Float = 1f,
+    val shuffleEnabled: Boolean = false,
+    val repeatMode: PlaybackRepeatMode = PlaybackRepeatMode.PLAYLIST_ONCE,
     val controlsLocked: Boolean = false,
     val unlockMethod: UnlockMethod = UnlockMethod.DOUBLE_TAP,
 )

@@ -65,6 +65,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         skipSeconds = preferences.getInt(KEY_SKIP_SECONDS, DEFAULT_SKIP_SECONDS),
         playbackSpeed = preferences.getFloat(KEY_PLAYBACK_SPEED, DEFAULT_PLAYBACK_SPEED)
             .coerceIn(MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED),
+        shuffleEnabled = preferences.getBoolean(KEY_SHUFFLE_ENABLED, false),
+        repeatMode = preferences.getString(KEY_REPEAT_MODE, null)
+            ?.let { savedValue -> PlaybackRepeatMode.entries.firstOrNull { it.name == savedValue } }
+            ?: PlaybackRepeatMode.PLAYLIST_ONCE,
         controlsLocked = preferences.getBoolean(KEY_CONTROLS_LOCKED, false),
         unlockMethod = preferences.getString(KEY_UNLOCK_METHOD, null)
             ?.let { savedValue -> UnlockMethod.entries.firstOrNull { it.name == savedValue } }
@@ -106,6 +110,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 controller = runCatching { controllerFuture.get() }.getOrNull()?.also {
                     it.addListener(playerListener)
                     it.playbackParameters = PlaybackParameters(playerState.playbackSpeed)
+                    it.shuffleModeEnabled = playerState.shuffleEnabled
+                    it.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
                 }
                 syncPlayerState()
                 startShortcutPlaybackIfReady()
@@ -130,13 +136,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun playTrack(track: AudioTrack) {
+    fun playTrack(track: AudioTrack, playlist: List<AudioTrack>) {
         if (playerState.controlsLocked) return
         val mediaController = controller ?: return
-        val index = tracks.indexOfFirst { it.id == track.id }
+        val queue = playlist.distinctBy { it.id }
+        val index = queue.indexOfFirst { it.id == track.id }
         if (index < 0) return
 
-        val items = tracks.map(::createMediaItem)
+        val items = queue.map(::createMediaItem)
+        mediaController.shuffleModeEnabled = playerState.shuffleEnabled
+        mediaController.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
         mediaController.setMediaItems(items, index, 0L)
         mediaController.prepare()
         mediaController.play()
@@ -191,6 +200,26 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         preferences.edit().putFloat(KEY_PLAYBACK_SPEED, selectedSpeed).apply()
         controller?.playbackParameters = PlaybackParameters(selectedSpeed)
         playerState = playerState.copy(playbackSpeed = selectedSpeed)
+    }
+
+    fun toggleShuffle() {
+        if (playerState.controlsLocked) return
+        val enabled = !playerState.shuffleEnabled
+        preferences.edit().putBoolean(KEY_SHUFFLE_ENABLED, enabled).apply()
+        controller?.shuffleModeEnabled = enabled
+        playerState = playerState.copy(shuffleEnabled = enabled)
+    }
+
+    fun cycleRepeatMode() {
+        if (playerState.controlsLocked) return
+        val mode = when (playerState.repeatMode) {
+            PlaybackRepeatMode.PLAYLIST_ONCE -> PlaybackRepeatMode.PLAYLIST_REPEAT
+            PlaybackRepeatMode.PLAYLIST_REPEAT -> PlaybackRepeatMode.TRACK_REPEAT
+            PlaybackRepeatMode.TRACK_REPEAT -> PlaybackRepeatMode.PLAYLIST_ONCE
+        }
+        preferences.edit().putString(KEY_REPEAT_MODE, mode.name).apply()
+        controller?.repeatMode = mode.toMedia3RepeatMode()
+        playerState = playerState.copy(repeatMode = mode)
     }
 
     fun setControlsLocked(locked: Boolean) {
@@ -284,6 +313,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentPositionMs = mediaController.currentPosition.coerceAtLeast(0L),
             durationMs = duration,
             playbackSpeed = mediaController.playbackParameters.speed,
+            shuffleEnabled = mediaController.shuffleModeEnabled,
+            repeatMode = mediaController.repeatMode.toPlaybackRepeatMode(),
         )
     }
 
@@ -309,7 +340,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val lastPlayedTrackId = preferences.getLong(KEY_LAST_PLAYED_TRACK_ID, NO_TRACK_ID)
         val track = tracks.firstOrNull { it.id == lastPlayedTrackId } ?: tracks.first()
         shortcutPlaybackRequested = false
-        playTrack(track)
+        playTrack(track, tracks)
     }
 
     private fun createMediaItem(track: AudioTrack, artworkData: ByteArray? = null): MediaItem = MediaItem.Builder()
@@ -518,6 +549,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun AudioTrack.matchesClassificationKeyword(keyword: String): Boolean =
         fileExtension() in autoClassificationExtensions && title.contains(keyword, ignoreCase = true)
 
+    private fun PlaybackRepeatMode.toMedia3RepeatMode(): Int = when (this) {
+        PlaybackRepeatMode.PLAYLIST_ONCE -> Player.REPEAT_MODE_OFF
+        PlaybackRepeatMode.PLAYLIST_REPEAT -> Player.REPEAT_MODE_ALL
+        PlaybackRepeatMode.TRACK_REPEAT -> Player.REPEAT_MODE_ONE
+    }
+
+    private fun Int.toPlaybackRepeatMode(): PlaybackRepeatMode = when (this) {
+        Player.REPEAT_MODE_ALL -> PlaybackRepeatMode.PLAYLIST_REPEAT
+        Player.REPEAT_MODE_ONE -> PlaybackRepeatMode.TRACK_REPEAT
+        else -> PlaybackRepeatMode.PLAYLIST_ONCE
+    }
+
     private fun AudioTrack.fileExtension(): String = title.substringAfterLast('.', "").uppercase()
 
     private fun JSONObject.optLongSet(key: String): Set<Long> {
@@ -546,6 +589,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val PREFERENCES_NAME = "audioseeker_preferences"
         private const val KEY_SKIP_SECONDS = "skip_seconds"
         private const val KEY_PLAYBACK_SPEED = "playback_speed"
+        private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
+        private const val KEY_REPEAT_MODE = "repeat_mode"
         private const val KEY_LAST_PLAYED_TRACK_ID = "last_played_track_id"
         private const val KEY_CONTROLS_LOCKED = "controls_locked"
         private const val KEY_UNLOCK_METHOD = "unlock_method"
