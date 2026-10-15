@@ -1026,6 +1026,13 @@ private fun SettingsScreen(
                     Text("2.0배", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(16.dp))
+                Text("삼성 루틴 재생", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "모드 및 루틴에서 애플리케이션 > 앱을 열거나 앱 동작 바로 실행 > AudioSeeker > 재생을 선택하면 마지막 재생 곡을 시작합니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(16.dp))
                 Text("조작 잠금 해제 방식", style = MaterialTheme.typography.titleSmall)
                 UnlockMethod.entries.forEach { method ->
                     Row(Modifier.fillMaxWidth().clickable { onSetUnlockMethod(method) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

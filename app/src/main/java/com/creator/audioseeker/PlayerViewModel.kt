@@ -44,6 +44,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private var controller: MediaController? = null
     private var pendingDeletion: Uri? = null
+    private var shortcutPlaybackRequested = false
+    private var shortcutTrackLoadInProgress = false
 
     var tracks: List<AudioTrack> by mutableStateOf(emptyList())
         private set
@@ -106,6 +108,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     it.playbackParameters = PlaybackParameters(playerState.playbackSpeed)
                 }
                 syncPlayerState()
+                startShortcutPlaybackIfReady()
             },
             ContextCompat.getMainExecutor(app),
         )
@@ -122,6 +125,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             withContext(Dispatchers.Main) {
                 tracks = loadedTracks
                 classifyNewTracks(loadedTracks)
+                startShortcutPlaybackIfReady()
             }
         }
     }
@@ -136,7 +140,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         mediaController.setMediaItems(items, index, 0L)
         mediaController.prepare()
         mediaController.play()
+        preferences.edit().putLong(KEY_LAST_PLAYED_TRACK_ID, track.id).apply()
         requestEmbeddedArtwork(track)
+    }
+
+    fun playLastTrack() {
+        if (playerState.controlsLocked) return
+        shortcutPlaybackRequested = true
+        startShortcutPlaybackIfReady()
     }
 
     fun togglePlayback() {
@@ -272,6 +283,31 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             durationMs = duration,
             playbackSpeed = mediaController.playbackParameters.speed,
         )
+    }
+
+    private fun startShortcutPlaybackIfReady() {
+        if (!shortcutPlaybackRequested || playerState.controlsLocked || controller == null) return
+
+        if (tracks.isEmpty()) {
+            if (!shortcutTrackLoadInProgress) {
+                shortcutTrackLoadInProgress = true
+                viewModelScope.launch(Dispatchers.IO) {
+                    val loadedTracks = queryTracks(app.contentResolver)
+                    withContext(Dispatchers.Main) {
+                        tracks = loadedTracks
+                        classifyNewTracks(loadedTracks)
+                        shortcutTrackLoadInProgress = false
+                        startShortcutPlaybackIfReady()
+                    }
+                }
+            }
+            return
+        }
+
+        val lastPlayedTrackId = preferences.getLong(KEY_LAST_PLAYED_TRACK_ID, NO_TRACK_ID)
+        val track = tracks.firstOrNull { it.id == lastPlayedTrackId } ?: tracks.first()
+        shortcutPlaybackRequested = false
+        playTrack(track)
     }
 
     private fun createMediaItem(track: AudioTrack, artworkData: ByteArray? = null): MediaItem = MediaItem.Builder()
@@ -507,11 +543,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val PREFERENCES_NAME = "audioseeker_preferences"
         private const val KEY_SKIP_SECONDS = "skip_seconds"
         private const val KEY_PLAYBACK_SPEED = "playback_speed"
+        private const val KEY_LAST_PLAYED_TRACK_ID = "last_played_track_id"
         private const val KEY_CONTROLS_LOCKED = "controls_locked"
         private const val KEY_UNLOCK_METHOD = "unlock_method"
         private const val KEY_THEME_PREFERENCE = "theme_preference"
         private const val KEY_SHOW_LOCK_SCREEN_ARTWORK = "show_lock_screen_artwork"
         private const val KEY_CLASSIFICATION_FOLDERS = "classification_folders"
         private const val KEY_AUTO_CLASSIFICATION_EXTENSIONS = "auto_classification_extensions"
+        private const val NO_TRACK_ID = -1L
     }
 }

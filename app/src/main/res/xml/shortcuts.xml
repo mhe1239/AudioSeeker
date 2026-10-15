@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="play_last_track"
+        android:enabled="true"
+        android:icon="@drawable/ic_audioseeker"
+        android:shortcutShortLabel="@string/shortcut_play_short_label"
+        android:shortcutLongLabel="@string/shortcut_play_long_label">
+        <intent
+            android:action="com.creator.audioseeker.action.PLAY_LAST_TRACK"
+            android:targetPackage="com.creator.audioseeker"
+            android:targetClass="com.creator.audioseeker.MainActivity" />
+    </shortcut>
+</shortcuts>
