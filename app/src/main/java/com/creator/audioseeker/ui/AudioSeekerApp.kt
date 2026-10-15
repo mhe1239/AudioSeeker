@@ -121,6 +121,8 @@ fun AudioSeekerApp(
     onSetUnlockMethod: (UnlockMethod) -> Unit,
     themePreference: ThemePreference,
     onSetThemePreference: (ThemePreference) -> Unit,
+    showLockScreenArtwork: Boolean,
+    onSetShowLockScreenArtwork: (Boolean) -> Unit,
     classificationFolders: List<ClassificationFolder>,
     autoClassificationExtensions: Set<String>,
     onAddClassificationFolder: (String, String) -> Unit,
@@ -170,6 +172,8 @@ fun AudioSeekerApp(
                     playerState = playerState,
                     selectedThemePreference = themePreference,
                     onSetThemePreference = onSetThemePreference,
+                    showLockScreenArtwork = showLockScreenArtwork,
+                    onSetShowLockScreenArtwork = onSetShowLockScreenArtwork,
                     selectedSeconds = playerState.skipSeconds,
                     onSetSkipSeconds = onSetSkipSeconds,
                     selectedUnlockMethod = playerState.unlockMethod,
@@ -903,6 +907,8 @@ private fun SettingsScreen(
     onSetUnlockMethod: (UnlockMethod) -> Unit,
     selectedThemePreference: ThemePreference,
     onSetThemePreference: (ThemePreference) -> Unit,
+    showLockScreenArtwork: Boolean,
+    onSetShowLockScreenArtwork: (Boolean) -> Unit,
     selectedAutoClassificationExtensions: Set<String>,
     onSetAutoClassificationExtensions: (Set<String>) -> Unit,
     onBack: () -> Unit,
@@ -937,6 +943,23 @@ private fun SettingsScreen(
                         RadioButton(selectedThemePreference == preference, onClick = { onSetThemePreference(preference) })
                         Text(preference.settingsLabel(), Modifier.padding(start = 8.dp))
                     }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("잠금화면 Now Bar 앨범 아트", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "켜면 잠금화면과 Now Bar를 열었을 때 곡의 앨범 아트를 표시합니다. 이미지가 없으면 앱 로고를 표시합니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    Modifier.fillMaxWidth().clickable { onSetShowLockScreenArtwork(!showLockScreenArtwork) }.padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = showLockScreenArtwork,
+                        onCheckedChange = onSetShowLockScreenArtwork,
+                    )
+                    Text("앨범 아트 표시", Modifier.padding(start = 8.dp))
                 }
                 Spacer(Modifier.height(16.dp))
                 Text("앞·뒤 탐색 시간", style = MaterialTheme.typography.titleSmall)

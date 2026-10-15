@@ -58,6 +58,8 @@ class MainActivity : ComponentActivity() {
                     onSetUnlockMethod = playerViewModel::setUnlockMethod,
                     themePreference = playerViewModel.themePreference,
                     onSetThemePreference = playerViewModel::updateThemePreference,
+                    showLockScreenArtwork = playerViewModel.showLockScreenArtwork,
+                    onSetShowLockScreenArtwork = playerViewModel::updateShowLockScreenArtwork,
                     classificationFolders = playerViewModel.classificationFolders,
                     autoClassificationExtensions = playerViewModel.autoClassificationExtensions,
                     onAddClassificationFolder = playerViewModel::addClassificationFolder,

@@ -1,6 +1,9 @@
 package com.creator.audioseeker
 
 import android.app.Application
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.content.ComponentName
 import android.content.ContentResolver
 import android.content.Context
@@ -27,6 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.util.UUID
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -69,6 +73,15 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             ?: ThemePreference.SYSTEM,
     )
         private set
+
+    var showLockScreenArtwork: Boolean by mutableStateOf(
+        preferences.getBoolean(KEY_SHOW_LOCK_SCREEN_ARTWORK, true),
+    )
+        private set
+
+    private val appArtworkData: ByteArray? by lazy { createAppArtworkData() }
+    private val embeddedArtworkCache = mutableMapOf<Long, ByteArray>()
+    private val artworkCheckedTrackIds = mutableSetOf<Long>()
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -115,21 +128,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val index = tracks.indexOfFirst { it.id == track.id }
         if (index < 0) return
 
-        val items = tracks.map { audioTrack ->
-            MediaItem.Builder()
-                .setMediaId(audioTrack.id.toString())
-                .setUri(audioTrack.uri)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(audioTrack.title)
-                        .setArtist(audioTrack.artist)
-                        .build(),
-                )
-                .build()
-        }
+        val items = tracks.map(::createMediaItem)
         mediaController.setMediaItems(items, index, 0L)
         mediaController.prepare()
         mediaController.play()
+        requestEmbeddedArtwork(track)
     }
 
     fun togglePlayback() {
@@ -177,6 +180,20 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun updateThemePreference(preference: ThemePreference) {
         preferences.edit().putString(KEY_THEME_PREFERENCE, preference.name).apply()
         themePreference = preference
+    }
+
+    fun updateShowLockScreenArtwork(show: Boolean) {
+        preferences.edit().putBoolean(KEY_SHOW_LOCK_SCREEN_ARTWORK, show).apply()
+        showLockScreenArtwork = show
+
+        val mediaController = controller ?: return
+        val currentTrack = tracks.firstOrNull { it.id == mediaController.currentMediaItem?.mediaId?.toLongOrNull() }
+            ?: return
+        val currentIndex = mediaController.currentMediaItemIndex
+        if (currentIndex != C.INDEX_UNSET) {
+            mediaController.replaceMediaItem(currentIndex, createMediaItem(currentTrack))
+            requestEmbeddedArtwork(currentTrack)
+        }
     }
 
     fun addClassificationFolder(name: String, keyword: String) {
@@ -228,6 +245,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
 
         val currentTrackId = mediaController.currentMediaItem?.mediaId?.toLongOrNull()
+        currentTrackId?.let { id ->
+            if (showLockScreenArtwork) tracks.firstOrNull { it.id == id }?.let(::requestEmbeddedArtwork)
+        }
         val duration = mediaController.duration.let { if (it == C.TIME_UNSET) 0L else it.coerceAtLeast(0L) }
         playerState = playerState.copy(
             isConnected = true,
@@ -236,6 +256,87 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentPositionMs = mediaController.currentPosition.coerceAtLeast(0L),
             durationMs = duration,
         )
+    }
+
+    private fun createMediaItem(track: AudioTrack, artworkData: ByteArray? = null): MediaItem = MediaItem.Builder()
+        .setMediaId(track.id.toString())
+        .setUri(track.uri)
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(track.title)
+                .setArtist(track.artist)
+                .apply {
+                    if (showLockScreenArtwork) {
+                        (artworkData ?: embeddedArtworkData(track) ?: appArtworkData)
+                            ?.let { setArtworkData(it, MediaMetadata.PICTURE_TYPE_FRONT_COVER) }
+                    }
+                }
+                .build(),
+        )
+        .build()
+
+    private fun requestEmbeddedArtwork(track: AudioTrack) {
+        if (!showLockScreenArtwork) return
+        val shouldLoad = synchronized(artworkCheckedTrackIds) {
+            artworkCheckedTrackIds.add(track.id)
+        }
+        if (!shouldLoad) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val artworkData = extractEmbeddedArtwork(track.uri) ?: return@launch
+            synchronized(embeddedArtworkCache) { embeddedArtworkCache[track.id] = artworkData }
+            withContext(Dispatchers.Main) {
+                val mediaController = controller ?: return@withContext
+                if (showLockScreenArtwork && mediaController.currentMediaItem?.mediaId == track.id.toString()) {
+                    val index = mediaController.currentMediaItemIndex
+                    if (index != C.INDEX_UNSET) mediaController.replaceMediaItem(index, createMediaItem(track, artworkData))
+                }
+            }
+        }
+    }
+
+    private fun embeddedArtworkData(track: AudioTrack): ByteArray? =
+        synchronized(embeddedArtworkCache) { embeddedArtworkCache[track.id] }
+
+    private fun extractEmbeddedArtwork(uri: Uri): ByteArray? = runCatching {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(app, uri)
+            retriever.embeddedPicture?.let(::resizeArtworkData)
+        } finally {
+            retriever.release()
+        }
+    }.getOrNull()
+
+    private fun createAppArtworkData(): ByteArray? = runCatching {
+        BitmapFactory.decodeResource(app.resources, R.drawable.audioseeker_brand_icon)
+            .let(::compressArtwork)
+    }.getOrNull()
+
+    private fun resizeArtworkData(data: ByteArray): ByteArray? = runCatching {
+        BitmapFactory.decodeByteArray(data, 0, data.size)?.let(::compressArtwork)
+    }.getOrNull()
+
+    private fun compressArtwork(source: Bitmap): ByteArray {
+        val largestSide = maxOf(source.width, source.height)
+        val artwork = if (largestSide > LOCK_SCREEN_ARTWORK_SIZE) {
+            val scale = LOCK_SCREEN_ARTWORK_SIZE.toFloat() / largestSide
+            Bitmap.createScaledBitmap(
+                source,
+                (source.width * scale).toInt().coerceAtLeast(1),
+                (source.height * scale).toInt().coerceAtLeast(1),
+                true,
+            )
+        } else {
+            source
+        }
+        val compressed = ByteArrayOutputStream().use { output ->
+            artwork.compress(Bitmap.CompressFormat.PNG, 100, output)
+            output.toByteArray()
+        }
+        if (artwork !== source) artwork.recycle()
+        source.recycle()
+        return compressed
     }
 
     override fun onCleared() {
@@ -375,6 +476,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     companion object {
         const val DEFAULT_SKIP_SECONDS = 10
+        private const val LOCK_SCREEN_ARTWORK_SIZE = 512
         val SKIP_INTERVALS = setOf(3, 5, 10, 15, 30)
         val SUPPORTED_AUTO_CLASSIFICATION_EXTENSIONS = listOf(
             "MP3", "M4A", "WAV", "FLAC", "AAC", "OGG", "OPUS", "WMA",
@@ -386,6 +488,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val KEY_CONTROLS_LOCKED = "controls_locked"
         private const val KEY_UNLOCK_METHOD = "unlock_method"
         private const val KEY_THEME_PREFERENCE = "theme_preference"
+        private const val KEY_SHOW_LOCK_SCREEN_ARTWORK = "show_lock_screen_artwork"
         private const val KEY_CLASSIFICATION_FOLDERS = "classification_folders"
         private const val KEY_AUTO_CLASSIFICATION_EXTENSIONS = "auto_classification_extensions"
     }
