@@ -43,6 +43,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     var playerState by mutableStateOf(PlayerUiState(
         skipSeconds = preferences.getInt(KEY_SKIP_SECONDS, DEFAULT_SKIP_SECONDS),
         controlsLocked = preferences.getBoolean(KEY_CONTROLS_LOCKED, false),
+        unlockMethod = preferences.getString(KEY_UNLOCK_METHOD, null)
+            ?.let { savedValue -> UnlockMethod.entries.firstOrNull { it.name == savedValue } }
+            ?: UnlockMethod.DOUBLE_TAP,
     ))
         private set
 
@@ -85,6 +88,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun playTrack(track: AudioTrack) {
+        if (playerState.controlsLocked) return
         val mediaController = controller ?: return
         val index = tracks.indexOfFirst { it.id == track.id }
         if (index < 0) return
@@ -141,6 +145,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun setControlsLocked(locked: Boolean) {
         preferences.edit().putBoolean(KEY_CONTROLS_LOCKED, locked).apply()
         playerState = playerState.copy(controlsLocked = locked)
+    }
+
+    fun setUnlockMethod(method: UnlockMethod) {
+        preferences.edit().putString(KEY_UNLOCK_METHOD, method.name).apply()
+        playerState = playerState.copy(unlockMethod = method)
     }
 
     fun updateProgress() = syncPlayerState()
@@ -232,5 +241,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val PREFERENCES_NAME = "audioseeker_preferences"
         private const val KEY_SKIP_SECONDS = "skip_seconds"
         private const val KEY_CONTROLS_LOCKED = "controls_locked"
+        private const val KEY_UNLOCK_METHOD = "unlock_method"
     }
 }

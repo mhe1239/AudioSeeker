@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
                     onSkipNext = playerViewModel::skipToNext,
                     onSetSkipSeconds = playerViewModel::setSkipSeconds,
                     onSetControlsLocked = playerViewModel::setControlsLocked,
+                    onSetUnlockMethod = playerViewModel::setUnlockMethod,
                     onDeleteTrack = { track ->
                         deleteLauncher.launch(
                             IntentSenderRequest.Builder(playerViewModel.createDeleteRequest(track)).build(),

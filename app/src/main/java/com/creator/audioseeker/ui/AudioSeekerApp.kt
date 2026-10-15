@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import com.creator.audioseeker.AudioTrack
 import com.creator.audioseeker.PlayerUiState
 import com.creator.audioseeker.PlayerViewModel
+import com.creator.audioseeker.UnlockMethod
 import kotlinx.coroutines.delay
 
 @Composable
@@ -88,6 +89,7 @@ fun AudioSeekerApp(
     onSkipNext: () -> Unit,
     onSetSkipSeconds: (Int) -> Unit,
     onSetControlsLocked: (Boolean) -> Unit,
+    onSetUnlockMethod: (UnlockMethod) -> Unit,
     onDeleteTrack: (AudioTrack) -> Unit,
     onRefresh: () -> Unit,
     onUpdateProgress: () -> Unit,
@@ -157,6 +159,8 @@ fun AudioSeekerApp(
         SettingsDialog(
             selectedSeconds = playerState.skipSeconds,
             onSetSkipSeconds = onSetSkipSeconds,
+            selectedUnlockMethod = playerState.unlockMethod,
+            onSetUnlockMethod = onSetUnlockMethod,
             onDismiss = { settingsOpen = false },
         )
     }
@@ -206,7 +210,13 @@ private fun LibraryScreen(
                 displayedTracks.isEmpty() -> EmptySearchResult(Modifier.weight(1f), searchQuery, selectedFolder)
                 else -> LazyColumn(modifier = Modifier.weight(1f)) {
                     items(displayedTracks, key = { it.id }) { track ->
-                        TrackRow(track, track.id == playerState.currentTrackId, { onPlayTrack(track) }, { onDeleteTrack(track) })
+                        TrackRow(
+                            track = track,
+                            isCurrent = track.id == playerState.currentTrackId,
+                            selectionEnabled = !playerState.controlsLocked,
+                            onPlay = { onPlayTrack(track) },
+                            onDelete = { onDeleteTrack(track) },
+                        )
                     }
                 }
             }
@@ -325,9 +335,15 @@ private fun EmptySearchResult(modifier: Modifier, query: String, selectedFolder:
 }
 
 @Composable
-private fun TrackRow(track: AudioTrack, isCurrent: Boolean, onPlay: () -> Unit, onDelete: () -> Unit) {
+private fun TrackRow(
+    track: AudioTrack,
+    isCurrent: Boolean,
+    selectionEnabled: Boolean,
+    onPlay: () -> Unit,
+    onDelete: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onPlay).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().clickable(enabled = selectionEnabled, role = Role.Button, onClick = onPlay).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Default.MusicNote, null, Modifier.size(32.dp), if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
@@ -361,8 +377,9 @@ private fun PlayerPanel(
                     Text(track?.title ?: "재생할 파일을 선택하세요", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
                     if (!compact) Text(track?.artist ?: "목록에서 파일을 누르면 재생됩니다", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                LockControl(playerState.controlsLocked, onToggleLock)
+                LockControl(playerState.controlsLocked, playerState.unlockMethod, onToggleLock)
             }
+            if (playerState.controlsLocked) LockHint(playerState.unlockMethod)
             PlaybackProgress(track != null, playerState, onSeekTo)
             PlaybackControls(track != null, playerState, onTogglePlayback, onSeekBy, onSkipPrevious, onSkipNext)
         }
@@ -382,7 +399,7 @@ private fun FocusedPlayerScreen(
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onBack, Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "라이브러리로 돌아가기") }
             Text("현재 재생", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-            LockControl(playerState.controlsLocked, onToggleLock)
+            LockControl(playerState.controlsLocked, playerState.unlockMethod, onToggleLock)
         }
         Spacer(Modifier.height(28.dp))
         Card(
@@ -404,7 +421,7 @@ private fun FocusedPlayerScreen(
         Spacer(Modifier.height(6.dp))
         PlaybackControls(true, playerState, onTogglePlayback, onSeekBy, onSkipPrevious, onSkipNext)
         if (playerState.controlsLocked) {
-            Text("조작 잠김 · 잠금 아이콘을 길게 눌러 해제", Modifier.fillMaxWidth(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            LockHint(playerState.unlockMethod)
         }
         Spacer(Modifier.height(20.dp))
     }
@@ -444,17 +461,30 @@ private fun PlaybackControls(
 
 @Composable
 @OptIn(ExperimentalFoundationApi::class)
-private fun LockControl(locked: Boolean, onToggleLock: () -> Unit) {
+private fun LockControl(locked: Boolean, unlockMethod: UnlockMethod, onToggleLock: () -> Unit) {
     Box(
         Modifier.size(48.dp).combinedClickable(
-            onClickLabel = if (locked) "길게 눌러 조작 잠금 해제" else "조작 잠금",
-            onLongClickLabel = "조작 잠금 해제", role = Role.Button,
-            onClick = { if (!locked) onToggleLock() }, onLongClick = { if (locked) onToggleLock() },
-        ).semantics { contentDescription = if (locked) "조작 잠김. 길게 눌러 잠금 해제" else "조작 잠금" },
+            onClickLabel = if (locked) unlockMethod.unlockActionLabel() else "조작 잠금",
+            onLongClickLabel = if (unlockMethod == UnlockMethod.LONG_PRESS) "조작 잠금 해제" else null,
+            role = Role.Button,
+            onClick = { if (!locked) onToggleLock() },
+            onDoubleClick = { if (locked && unlockMethod == UnlockMethod.DOUBLE_TAP) onToggleLock() },
+            onLongClick = { if (locked && unlockMethod == UnlockMethod.LONG_PRESS) onToggleLock() },
+        ).semantics { contentDescription = if (locked) "조작 잠김. ${unlockMethod.unlockActionLabel()} 해제" else "조작 잠금" },
         contentAlignment = Alignment.Center,
     ) {
         Icon(if (locked) Icons.Default.Lock else Icons.Default.LockOpen, null, tint = if (locked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
     }
+}
+
+@Composable
+private fun LockHint(unlockMethod: UnlockMethod) {
+    Text(
+        "조작 잠김 · 잠금 아이콘을 ${unlockMethod.unlockActionLabel()} 해제",
+        Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.primary,
+    )
 }
 
 @Composable
@@ -468,7 +498,13 @@ private fun PlayerButton(
 }
 
 @Composable
-private fun SettingsDialog(selectedSeconds: Int, onSetSkipSeconds: (Int) -> Unit, onDismiss: () -> Unit) {
+private fun SettingsDialog(
+    selectedSeconds: Int,
+    onSetSkipSeconds: (Int) -> Unit,
+    selectedUnlockMethod: UnlockMethod,
+    onSetUnlockMethod: (UnlockMethod) -> Unit,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss, title = { Text("재생 설정") },
         text = {
@@ -480,10 +516,28 @@ private fun SettingsDialog(selectedSeconds: Int, onSetSkipSeconds: (Int) -> Unit
                         Text("${seconds}초", Modifier.padding(start = 8.dp))
                     }
                 }
+                Spacer(Modifier.height(16.dp))
+                Text("조작 잠금 해제 방식", style = MaterialTheme.typography.titleSmall)
+                UnlockMethod.entries.forEach { method ->
+                    Row(Modifier.fillMaxWidth().clickable { onSetUnlockMethod(method) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selectedUnlockMethod == method, onClick = { onSetUnlockMethod(method) })
+                        Text(method.settingsLabel(), Modifier.padding(start = 8.dp))
+                    }
+                }
             }
         },
         confirmButton = { TextButton(onDismiss) { Text("완료") } },
     )
+}
+
+private fun UnlockMethod.settingsLabel(): String = when (this) {
+    UnlockMethod.DOUBLE_TAP -> "두 번 눌러 해제"
+    UnlockMethod.LONG_PRESS -> "길게 눌러 해제"
+}
+
+private fun UnlockMethod.unlockActionLabel(): String = when (this) {
+    UnlockMethod.DOUBLE_TAP -> "두 번 눌러"
+    UnlockMethod.LONG_PRESS -> "길게 눌러"
 }
 
 private fun AudioTrack.folderName(): String {

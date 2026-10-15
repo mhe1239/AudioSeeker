@@ -2,6 +2,11 @@ package com.creator.audioseeker
 
 import android.net.Uri
 
+enum class UnlockMethod {
+    DOUBLE_TAP,
+    LONG_PRESS,
+}
+
 data class AudioTrack(
     val id: Long,
     val uri: Uri,
@@ -19,4 +24,5 @@ data class PlayerUiState(
     val durationMs: Long = 0L,
     val skipSeconds: Int = 10,
     val controlsLocked: Boolean = false,
+    val unlockMethod: UnlockMethod = UnlockMethod.DOUBLE_TAP,
 )
