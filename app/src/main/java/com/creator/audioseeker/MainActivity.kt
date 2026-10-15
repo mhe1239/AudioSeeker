@@ -61,9 +61,9 @@ class MainActivity : ComponentActivity() {
                     onAddClassificationFolder = playerViewModel::addClassificationFolder,
                     onRemoveClassificationFolder = playerViewModel::removeClassificationFolder,
                     onSetAutoClassificationExtensions = playerViewModel::updateAutoClassificationExtensions,
-                    onDeleteTrack = { track ->
+                    onDeleteTracks = { tracks ->
                         deleteLauncher.launch(
-                            IntentSenderRequest.Builder(playerViewModel.createDeleteRequest(track)).build(),
+                            IntentSenderRequest.Builder(playerViewModel.createDeleteRequest(tracks)).build(),
                         )
                     },
                     onRefresh = playerViewModel::loadTracks,

@@ -192,9 +192,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateProgress() = syncPlayerState()
 
-    fun createDeleteRequest(track: AudioTrack): IntentSender {
-        pendingDeletion = track.uri
-        return MediaStore.createDeleteRequest(app.contentResolver, listOf(track.uri)).intentSender
+    fun createDeleteRequest(tracks: List<AudioTrack>): IntentSender {
+        require(tracks.isNotEmpty())
+        pendingDeletion = tracks.first().uri
+        return MediaStore.createDeleteRequest(app.contentResolver, tracks.map { it.uri }).intentSender
     }
 
     fun onDeleteResult(deleted: Boolean) {

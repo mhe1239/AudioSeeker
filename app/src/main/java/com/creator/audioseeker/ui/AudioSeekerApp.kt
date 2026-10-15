@@ -113,7 +113,7 @@ fun AudioSeekerApp(
     onAddClassificationFolder: (String, String) -> Unit,
     onRemoveClassificationFolder: (ClassificationFolder) -> Unit,
     onSetAutoClassificationExtensions: (Set<String>) -> Unit,
-    onDeleteTrack: (AudioTrack) -> Unit,
+    onDeleteTracks: (List<AudioTrack>) -> Unit,
     onRefresh: () -> Unit,
     onUpdateProgress: () -> Unit,
 ) {
@@ -124,6 +124,7 @@ fun AudioSeekerApp(
     var selectedDeviceFolder by remember { mutableStateOf<String?>(null) }
     var selectedClassificationFolder by remember { mutableStateOf<ClassificationFolder?>(null) }
     var classificationEditorOpen by remember { mutableStateOf(false) }
+    var pendingDeletionTracks by remember { mutableStateOf<List<AudioTrack>?>(null) }
     var focusOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(playerState.isPlaying) {
@@ -185,7 +186,7 @@ fun AudioSeekerApp(
                         }
                     },
                     onPlayTrack = onPlayTrack,
-                    onDeleteTrack = onDeleteTrack,
+                    onRequestDeleteTrack = { track -> pendingDeletionTracks = listOf(track) },
                     onRefresh = onRefresh,
                     onSettings = { settingsOpen = true },
                     onOpenFocus = { focusOpen = true },
@@ -222,6 +223,17 @@ fun AudioSeekerApp(
             onDismiss = { classificationEditorOpen = false },
         )
     }
+
+    pendingDeletionTracks?.let { tracksToDelete ->
+        DeleteConfirmationDialog(
+            tracks = tracksToDelete,
+            onDismiss = { pendingDeletionTracks = null },
+            onConfirm = {
+                pendingDeletionTracks = null
+                onDeleteTracks(tracksToDelete)
+            },
+        )
+    }
 }
 
 @Composable
@@ -238,7 +250,7 @@ private fun LibraryScreen(
     onClearClassificationFolder: () -> Unit,
     onOpenClassificationEditor: () -> Unit,
     onRemoveClassificationFolder: (ClassificationFolder) -> Unit,
-    onPlayTrack: (AudioTrack) -> Unit, onDeleteTrack: (AudioTrack) -> Unit,
+    onPlayTrack: (AudioTrack) -> Unit, onRequestDeleteTrack: (AudioTrack) -> Unit,
     onRefresh: () -> Unit, onSettings: () -> Unit, onOpenFocus: () -> Unit,
     onTogglePlayback: () -> Unit, onSeekTo: (Long) -> Unit, onSeekBy: (Int) -> Unit,
     onSkipPrevious: () -> Unit, onSkipNext: () -> Unit, onToggleLock: () -> Unit,
@@ -309,7 +321,7 @@ private fun LibraryScreen(
                             isCurrent = track.id == playerState.currentTrackId,
                             selectionEnabled = !playerState.controlsLocked,
                             onPlay = { onPlayTrack(track) },
-                            onDelete = { onDeleteTrack(track) },
+                            onDelete = { onRequestDeleteTrack(track) },
                         )
                     }
                 }
@@ -524,6 +536,65 @@ private fun EmptySearchResult(
         }
         Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+@Composable
+private fun DeleteConfirmationDialog(
+    tracks: List<AudioTrack>,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text("곡 ${tracks.size}개를 삭제할까요?")
+        },
+        text = {
+            Column(Modifier.heightIn(max = 260.dp).verticalScroll(rememberScrollState())) {
+                Text(
+                    "아래 파일이 기기에서 삭제됩니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                tracks.forEach { track ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Default.MusicNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                "${track.artist} · ${track.folderName()}",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "계속하면 Android 권한 확인 창이 표시됩니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text("삭제", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("취소") } },
+    )
 }
 
 @Composable
