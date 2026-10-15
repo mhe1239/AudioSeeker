@@ -63,6 +63,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     ))
         private set
 
+    var themePreference: ThemePreference by mutableStateOf(
+        preferences.getString(KEY_THEME_PREFERENCE, null)
+            ?.let { savedValue -> ThemePreference.entries.firstOrNull { it.name == savedValue } }
+            ?: ThemePreference.SYSTEM,
+    )
+        private set
+
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             syncPlayerState()
@@ -165,6 +172,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun setUnlockMethod(method: UnlockMethod) {
         preferences.edit().putString(KEY_UNLOCK_METHOD, method.name).apply()
         playerState = playerState.copy(unlockMethod = method)
+    }
+
+    fun updateThemePreference(preference: ThemePreference) {
+        preferences.edit().putString(KEY_THEME_PREFERENCE, preference.name).apply()
+        themePreference = preference
     }
 
     fun addClassificationFolder(name: String, keyword: String) {
@@ -373,6 +385,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val KEY_SKIP_SECONDS = "skip_seconds"
         private const val KEY_CONTROLS_LOCKED = "controls_locked"
         private const val KEY_UNLOCK_METHOD = "unlock_method"
+        private const val KEY_THEME_PREFERENCE = "theme_preference"
         private const val KEY_CLASSIFICATION_FOLDERS = "classification_folders"
         private const val KEY_AUTO_CLASSIFICATION_EXTENSIONS = "auto_classification_extensions"
     }

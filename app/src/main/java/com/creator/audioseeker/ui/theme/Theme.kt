@@ -10,6 +10,7 @@ import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.Color
 import androidx.core.view.WindowCompat
+import com.creator.audioseeker.ThemePreference
 
 private val LightColors = lightColorScheme(
     primary = Color(0xFF0F766E),
@@ -48,8 +49,12 @@ private val DarkColors = darkColorScheme(
 )
 
 @Composable
-fun AudioSeekerTheme(content: @Composable () -> Unit) {
-    val darkTheme = isSystemInDarkTheme()
+fun AudioSeekerTheme(themePreference: ThemePreference, content: @Composable () -> Unit) {
+    val darkTheme = when (themePreference) {
+        ThemePreference.SYSTEM -> isSystemInDarkTheme()
+        ThemePreference.DARK -> true
+        ThemePreference.LIGHT -> false
+    }
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {

@@ -95,6 +95,7 @@ import com.creator.audioseeker.ClassificationFolder
 import com.creator.audioseeker.PlayerUiState
 import com.creator.audioseeker.PlayerViewModel
 import com.creator.audioseeker.R
+import com.creator.audioseeker.ThemePreference
 import com.creator.audioseeker.UnlockMethod
 import kotlinx.coroutines.delay
 
@@ -118,6 +119,8 @@ fun AudioSeekerApp(
     onSetSkipSeconds: (Int) -> Unit,
     onSetControlsLocked: (Boolean) -> Unit,
     onSetUnlockMethod: (UnlockMethod) -> Unit,
+    themePreference: ThemePreference,
+    onSetThemePreference: (ThemePreference) -> Unit,
     classificationFolders: List<ClassificationFolder>,
     autoClassificationExtensions: Set<String>,
     onAddClassificationFolder: (String, String) -> Unit,
@@ -217,6 +220,8 @@ fun AudioSeekerApp(
             onSetSkipSeconds = onSetSkipSeconds,
             selectedUnlockMethod = playerState.unlockMethod,
             onSetUnlockMethod = onSetUnlockMethod,
+            selectedThemePreference = themePreference,
+            onSetThemePreference = onSetThemePreference,
             selectedAutoClassificationExtensions = autoClassificationExtensions,
             onSetAutoClassificationExtensions = onSetAutoClassificationExtensions,
             onDismiss = { settingsOpen = false },
@@ -413,7 +418,7 @@ private fun AppHeader(
         HelpIconButton("파일 목록 새로고침", onRefresh, Modifier.size(48.dp)) {
             Icon(Icons.Default.Refresh, null, tint = MaterialTheme.colorScheme.onSurface)
         }
-        HelpIconButton("재생 설정", onSettings, Modifier.size(48.dp)) {
+        HelpIconButton("앱 설정", onSettings, Modifier.size(48.dp)) {
             Icon(Icons.Default.Settings, null, tint = MaterialTheme.colorScheme.onSurface)
         }
     }
@@ -887,14 +892,24 @@ private fun SettingsDialog(
     onSetSkipSeconds: (Int) -> Unit,
     selectedUnlockMethod: UnlockMethod,
     onSetUnlockMethod: (UnlockMethod) -> Unit,
+    selectedThemePreference: ThemePreference,
+    onSetThemePreference: (ThemePreference) -> Unit,
     selectedAutoClassificationExtensions: Set<String>,
     onSetAutoClassificationExtensions: (Set<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
-        onDismissRequest = onDismiss, title = { Text("재생 설정") },
+        onDismissRequest = onDismiss, title = { Text("앱 설정") },
         text = {
             Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+                Text("화면 모드", style = MaterialTheme.typography.titleSmall)
+                ThemePreference.entries.forEach { preference ->
+                    Row(Modifier.fillMaxWidth().clickable { onSetThemePreference(preference) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selectedThemePreference == preference, onClick = { onSetThemePreference(preference) })
+                        Text(preference.settingsLabel(), Modifier.padding(start = 8.dp))
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
                 Text("앞·뒤 탐색 시간", style = MaterialTheme.typography.titleSmall)
                 PlayerViewModel.SKIP_INTERVALS.sorted().forEach { seconds ->
                     Row(Modifier.fillMaxWidth().clickable { onSetSkipSeconds(seconds) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1007,6 +1022,12 @@ private fun ClassificationFolderDialog(
 private fun UnlockMethod.settingsLabel(): String = when (this) {
     UnlockMethod.DOUBLE_TAP -> "두 번 눌러 해제"
     UnlockMethod.LONG_PRESS -> "길게 눌러 해제"
+}
+
+private fun ThemePreference.settingsLabel(): String = when (this) {
+    ThemePreference.SYSTEM -> "시스템 설정 사용"
+    ThemePreference.DARK -> "다크 모드"
+    ThemePreference.LIGHT -> "라이트 모드"
 }
 
 private fun UnlockMethod.unlockActionLabel(): String = when (this) {

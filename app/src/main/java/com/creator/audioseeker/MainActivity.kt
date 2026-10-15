@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
                 if (hasAudioPermission) playerViewModel.loadTracks()
             }
 
-            AudioSeekerTheme {
+            AudioSeekerTheme(playerViewModel.themePreference) {
                 AudioSeekerApp(
                     hasAudioPermission = hasAudioPermission,
                     tracks = playerViewModel.tracks,
@@ -56,6 +56,8 @@ class MainActivity : ComponentActivity() {
                     onSetSkipSeconds = playerViewModel::setSkipSeconds,
                     onSetControlsLocked = playerViewModel::setControlsLocked,
                     onSetUnlockMethod = playerViewModel::setUnlockMethod,
+                    themePreference = playerViewModel.themePreference,
+                    onSetThemePreference = playerViewModel::updateThemePreference,
                     classificationFolders = playerViewModel.classificationFolders,
                     autoClassificationExtensions = playerViewModel.autoClassificationExtensions,
                     onAddClassificationFolder = playerViewModel::addClassificationFolder,

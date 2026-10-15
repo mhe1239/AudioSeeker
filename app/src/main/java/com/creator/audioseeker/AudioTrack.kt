@@ -7,6 +7,12 @@ enum class UnlockMethod {
     LONG_PRESS,
 }
 
+enum class ThemePreference {
+    SYSTEM,
+    DARK,
+    LIGHT,
+}
+
 data class ClassificationFolder(
     val id: String,
     val name: String,
