@@ -58,12 +58,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -373,23 +378,35 @@ private fun AppHeader(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        IconButton(onSearch, Modifier.size(48.dp)) { Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, if (searchOpen) "검색 닫기" else "음악 검색") }
-        IconButton(onDeviceFolders, Modifier.size(48.dp)) {
+        HelpIconButton(
+            label = if (searchOpen) "검색 닫기" else "음악 검색",
+            onClick = onSearch,
+            modifier = Modifier.size(48.dp),
+        ) { Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, null) }
+        HelpIconButton(
+            if (folderViewMode == FolderViewMode.DEVICE) "곡 목록 보기" else "기기 폴더 보기",
+            onDeviceFolders,
+            Modifier.size(48.dp),
+        ) {
             Icon(
                 Icons.Default.Folder,
-                if (folderViewMode == FolderViewMode.DEVICE) "곡 목록 보기" else "기기 폴더 보기",
+                null,
                 tint = if (folderViewMode == FolderViewMode.DEVICE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
         }
-        IconButton(onAutomaticFolders, Modifier.size(48.dp)) {
+        HelpIconButton(
+            if (folderViewMode == FolderViewMode.AUTOMATIC) "곡 목록 보기" else "자동 분류 폴더 보기",
+            onAutomaticFolders,
+            Modifier.size(48.dp),
+        ) {
             Icon(
                 Icons.Default.FilterAlt,
-                if (folderViewMode == FolderViewMode.AUTOMATIC) "곡 목록 보기" else "자동 분류 폴더 보기",
+                null,
                 tint = if (folderViewMode == FolderViewMode.AUTOMATIC) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
             )
         }
-        IconButton(onRefresh, Modifier.size(48.dp)) { Icon(Icons.Default.Refresh, "파일 목록 새로고침") }
-        IconButton(onSettings, Modifier.size(48.dp)) { Icon(Icons.Default.Settings, "재생 설정") }
+        HelpIconButton("파일 목록 새로고침", onRefresh, Modifier.size(48.dp)) { Icon(Icons.Default.Refresh, null) }
+        HelpIconButton("재생 설정", onSettings, Modifier.size(48.dp)) { Icon(Icons.Default.Settings, null) }
     }
 }
 
@@ -401,8 +418,11 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClose:
         singleLine = true, label = { Text("파일명, 크리에이터 또는 폴더 검색") },
         leadingIcon = { Icon(Icons.Default.Search, null) },
         trailingIcon = {
-            IconButton(onClick = { if (query.isEmpty()) onClose() else onQueryChange("") }) {
-                Icon(Icons.Default.Close, if (query.isEmpty()) "검색 닫기" else "검색어 지우기")
+            HelpIconButton(
+                label = if (query.isEmpty()) "검색 닫기" else "검색어 지우기",
+                onClick = { if (query.isEmpty()) onClose() else onQueryChange("") },
+            ) {
+                Icon(Icons.Default.Close, null)
             }
         },
     )
@@ -500,8 +520,8 @@ private fun ClassificationFolderList(
                     Text(folder.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("검색어: ${folder.keyword} · ${matchedCount}개 파일", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
-                IconButton(onClick = { onRemoveFolder(folder) }, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.Default.Delete, contentDescription = "${folder.name} 자동 분류 폴더 삭제", tint = MaterialTheme.colorScheme.error)
+                HelpIconButton("${folder.name} 자동 분류 폴더 삭제", { onRemoveFolder(folder) }, Modifier.size(48.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -620,7 +640,9 @@ private fun TrackRow(
                 if (isCurrent) Text("현재 재생 중", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Medium)
                 else Text(track.folderName(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            IconButton(onDelete, Modifier.size(48.dp)) { Icon(Icons.Default.Delete, "${track.title} 삭제", tint = MaterialTheme.colorScheme.error) }
+            HelpIconButton("${track.title} 삭제", onDelete, Modifier.size(48.dp)) {
+                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+            }
         }
     }
     HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -667,7 +689,9 @@ private fun FocusedPlayerScreen(
         Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp),
     ) {
         Row(Modifier.fillMaxWidth().heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onBack, Modifier.size(48.dp)) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "라이브러리로 돌아가기") }
+            HelpIconButton("라이브러리로 돌아가기", onBack, Modifier.size(48.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null)
+            }
             Text("현재 재생", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
             LockControl(playerState.controlsLocked, playerState.unlockMethod, onToggleLock)
         }
@@ -776,12 +800,35 @@ private fun PlayerButton(
     } else {
         Modifier.size(48.dp)
     }
-    IconButton(onClick = onClick, modifier = modifier, enabled = enabled) {
+    HelpIconButton(description, onClick, modifier, enabled) {
         Icon(
             icon,
-            description,
+            null,
             Modifier.size(if (prominent) 32.dp else 26.dp),
             if (prominent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HelpIconButton(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    content: @Composable () -> Unit,
+) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState(),
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = modifier.semantics { contentDescription = label },
+            enabled = enabled,
+            content = content,
         )
     }
 }
