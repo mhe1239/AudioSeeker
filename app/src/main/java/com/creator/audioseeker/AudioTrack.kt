@@ -7,6 +7,12 @@ enum class UnlockMethod {
     LONG_PRESS,
 }
 
+data class ClassificationFolder(
+    val id: String,
+    val name: String,
+    val keyword: String,
+)
+
 data class AudioTrack(
     val id: Long,
     val uri: Uri,

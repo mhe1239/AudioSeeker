@@ -31,10 +31,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.FilterAlt
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
@@ -48,6 +50,7 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -78,11 +81,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.creator.audioseeker.AudioTrack
+import com.creator.audioseeker.ClassificationFolder
 import com.creator.audioseeker.PlayerUiState
 import com.creator.audioseeker.PlayerViewModel
 import com.creator.audioseeker.R
 import com.creator.audioseeker.UnlockMethod
 import kotlinx.coroutines.delay
+
+private enum class FolderViewMode {
+    DEVICE,
+    AUTOMATIC,
+}
 
 @Composable
 fun AudioSeekerApp(
@@ -99,6 +108,11 @@ fun AudioSeekerApp(
     onSetSkipSeconds: (Int) -> Unit,
     onSetControlsLocked: (Boolean) -> Unit,
     onSetUnlockMethod: (UnlockMethod) -> Unit,
+    classificationFolders: List<ClassificationFolder>,
+    autoClassificationExtensions: Set<String>,
+    onAddClassificationFolder: (String, String) -> Unit,
+    onRemoveClassificationFolder: (ClassificationFolder) -> Unit,
+    onSetAutoClassificationExtensions: (Set<String>) -> Unit,
     onDeleteTrack: (AudioTrack) -> Unit,
     onRefresh: () -> Unit,
     onUpdateProgress: () -> Unit,
@@ -106,8 +120,10 @@ fun AudioSeekerApp(
     var settingsOpen by remember { mutableStateOf(false) }
     var searchOpen by remember { mutableStateOf(false) }
     var searchQuery by remember { mutableStateOf("") }
-    var foldersOpen by remember { mutableStateOf(false) }
-    var selectedFolder by remember { mutableStateOf<String?>(null) }
+    var folderViewMode by remember { mutableStateOf<FolderViewMode?>(null) }
+    var selectedDeviceFolder by remember { mutableStateOf<String?>(null) }
+    var selectedClassificationFolder by remember { mutableStateOf<ClassificationFolder?>(null) }
+    var classificationEditorOpen by remember { mutableStateOf(false) }
     var focusOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(playerState.isPlaying) {
@@ -141,13 +157,33 @@ fun AudioSeekerApp(
                     playerState = playerState,
                     searchOpen = searchOpen,
                     searchQuery = searchQuery,
-                    foldersOpen = foldersOpen,
-                    selectedFolder = selectedFolder,
+                    folderViewMode = folderViewMode,
+                    selectedDeviceFolder = selectedDeviceFolder,
+                    selectedClassificationFolder = selectedClassificationFolder,
+                    classificationFolders = classificationFolders,
+                    autoClassificationExtensions = autoClassificationExtensions,
                     onSetSearchOpen = { searchOpen = it },
                     onSearchQueryChange = { searchQuery = it },
-                    onSetFoldersOpen = { foldersOpen = it },
-                    onSelectFolder = { folder -> selectedFolder = folder; foldersOpen = false },
-                    onClearFolder = { selectedFolder = null },
+                    onSetFolderViewMode = { folderViewMode = it },
+                    onSelectDeviceFolder = { folder ->
+                        selectedDeviceFolder = folder
+                        selectedClassificationFolder = null
+                        folderViewMode = null
+                    },
+                    onSelectClassificationFolder = { folder ->
+                        selectedClassificationFolder = folder
+                        selectedDeviceFolder = null
+                        folderViewMode = null
+                    },
+                    onClearDeviceFolder = { selectedDeviceFolder = null },
+                    onClearClassificationFolder = { selectedClassificationFolder = null },
+                    onOpenClassificationEditor = { classificationEditorOpen = true },
+                    onRemoveClassificationFolder = { folder ->
+                        onRemoveClassificationFolder(folder)
+                        if (selectedClassificationFolder?.id == folder.id) {
+                            selectedClassificationFolder = null
+                        }
+                    },
                     onPlayTrack = onPlayTrack,
                     onDeleteTrack = onDeleteTrack,
                     onRefresh = onRefresh,
@@ -170,7 +206,20 @@ fun AudioSeekerApp(
             onSetSkipSeconds = onSetSkipSeconds,
             selectedUnlockMethod = playerState.unlockMethod,
             onSetUnlockMethod = onSetUnlockMethod,
+            selectedAutoClassificationExtensions = autoClassificationExtensions,
+            onSetAutoClassificationExtensions = onSetAutoClassificationExtensions,
             onDismiss = { settingsOpen = false },
+        )
+    }
+
+    if (classificationEditorOpen) {
+        ClassificationFolderDialog(
+            selectedExtensions = autoClassificationExtensions,
+            onAdd = { name, keyword ->
+                onAddClassificationFolder(name, keyword)
+                classificationEditorOpen = false
+            },
+            onDismiss = { classificationEditorOpen = false },
         )
     }
 }
@@ -178,9 +227,17 @@ fun AudioSeekerApp(
 @Composable
 private fun LibraryScreen(
     tracks: List<AudioTrack>, currentTrack: AudioTrack?, playerState: PlayerUiState,
-    searchOpen: Boolean, searchQuery: String, foldersOpen: Boolean, selectedFolder: String?,
+    searchOpen: Boolean, searchQuery: String, folderViewMode: FolderViewMode?,
+    selectedDeviceFolder: String?, selectedClassificationFolder: ClassificationFolder?,
+    classificationFolders: List<ClassificationFolder>, autoClassificationExtensions: Set<String>,
     onSetSearchOpen: (Boolean) -> Unit, onSearchQueryChange: (String) -> Unit,
-    onSetFoldersOpen: (Boolean) -> Unit, onSelectFolder: (String) -> Unit, onClearFolder: () -> Unit,
+    onSetFolderViewMode: (FolderViewMode?) -> Unit,
+    onSelectDeviceFolder: (String) -> Unit,
+    onSelectClassificationFolder: (ClassificationFolder) -> Unit,
+    onClearDeviceFolder: () -> Unit,
+    onClearClassificationFolder: () -> Unit,
+    onOpenClassificationEditor: () -> Unit,
+    onRemoveClassificationFolder: (ClassificationFolder) -> Unit,
     onPlayTrack: (AudioTrack) -> Unit, onDeleteTrack: (AudioTrack) -> Unit,
     onRefresh: () -> Unit, onSettings: () -> Unit, onOpenFocus: () -> Unit,
     onTogglePlayback: () -> Unit, onSeekTo: (Long) -> Unit, onSeekBy: (Int) -> Unit,
@@ -193,8 +250,11 @@ private fun LibraryScreen(
             }
         }
     }
-    val displayedTracks = remember(searchResults, selectedFolder) {
-        searchResults.filter { selectedFolder == null || it.folderName() == selectedFolder }
+    val displayedTracks = remember(searchResults, selectedDeviceFolder, selectedClassificationFolder, autoClassificationExtensions) {
+        searchResults.filter { track ->
+            (selectedDeviceFolder == null || track.folderName() == selectedDeviceFolder) &&
+                (selectedClassificationFolder == null || track.matchesClassificationFolder(selectedClassificationFolder, autoClassificationExtensions))
+        }
     }
     val folders = remember(searchResults) {
         searchResults.groupBy { it.folderName() }.toList().sortedBy { it.first.lowercase() }
@@ -204,19 +264,44 @@ private fun LibraryScreen(
         val isCompactHeight = maxHeight < 420.dp
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             AppHeader(
-                foldersOpen = foldersOpen, searchOpen = searchOpen, onRefresh = onRefresh,
+                folderViewMode = folderViewMode, searchOpen = searchOpen, onRefresh = onRefresh,
                 onSearch = { onSetSearchOpen(!searchOpen) },
-                onFolders = { onSetFoldersOpen(!foldersOpen) }, onSettings = onSettings,
+                onDeviceFolders = {
+                    onSetFolderViewMode(if (folderViewMode == FolderViewMode.DEVICE) null else FolderViewMode.DEVICE)
+                },
+                onAutomaticFolders = {
+                    onSetFolderViewMode(if (folderViewMode == FolderViewMode.AUTOMATIC) null else FolderViewMode.AUTOMATIC)
+                },
+                onSettings = onSettings,
             )
             if (searchOpen) SearchField(searchQuery, onSearchQueryChange) {
                 onSearchQueryChange(""); onSetSearchOpen(false)
             }
-            if (selectedFolder != null && !foldersOpen) SelectedFolderRow(selectedFolder, onClearFolder)
+            if (selectedDeviceFolder != null && folderViewMode == null) {
+                SelectedDeviceFolderRow(selectedDeviceFolder, onClearDeviceFolder)
+            }
+            if (selectedClassificationFolder != null && folderViewMode == null) {
+                SelectedClassificationFolderRow(selectedClassificationFolder, onClearClassificationFolder)
+            }
 
             when {
                 tracks.isEmpty() -> EmptyLibrary(Modifier.weight(1f))
-                foldersOpen -> FolderList(folders, Modifier.weight(1f), onSelectFolder)
-                displayedTracks.isEmpty() -> EmptySearchResult(Modifier.weight(1f), searchQuery, selectedFolder)
+                folderViewMode == FolderViewMode.DEVICE -> DeviceFolderList(folders, Modifier.weight(1f), onSelectDeviceFolder)
+                folderViewMode == FolderViewMode.AUTOMATIC -> ClassificationFolderList(
+                    folders = classificationFolders,
+                    tracks = searchResults,
+                    selectedExtensions = autoClassificationExtensions,
+                    modifier = Modifier.weight(1f),
+                    onAddFolder = onOpenClassificationEditor,
+                    onSelectFolder = onSelectClassificationFolder,
+                    onRemoveFolder = onRemoveClassificationFolder,
+                )
+                displayedTracks.isEmpty() -> EmptySearchResult(
+                    Modifier.weight(1f),
+                    searchQuery,
+                    selectedDeviceFolder,
+                    selectedClassificationFolder,
+                )
                 else -> LazyColumn(modifier = Modifier.weight(1f)) {
                     items(displayedTracks, key = { it.id }) { track ->
                         TrackRow(
@@ -256,8 +341,8 @@ private fun AudioPermissionScreen(onRequestAudioPermission: () -> Unit) {
 
 @Composable
 private fun AppHeader(
-    foldersOpen: Boolean, searchOpen: Boolean, onRefresh: () -> Unit,
-    onSearch: () -> Unit, onFolders: () -> Unit, onSettings: () -> Unit,
+    folderViewMode: FolderViewMode?, searchOpen: Boolean, onRefresh: () -> Unit,
+    onSearch: () -> Unit, onDeviceFolders: () -> Unit, onAutomaticFolders: () -> Unit, onSettings: () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -265,10 +350,31 @@ private fun AppHeader(
     ) {
         Column(Modifier.weight(1f)) {
             Text("AudioSeeker", style = MaterialTheme.typography.headlineSmall)
-            Text(if (foldersOpen) "폴더별 음악과 녹음" else "기기의 음악과 녹음", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                when (folderViewMode) {
+                    FolderViewMode.DEVICE -> "기기 폴더별 음악과 녹음"
+                    FolderViewMode.AUTOMATIC -> "자동 분류 폴더"
+                    null -> "기기의 음악과 녹음"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         IconButton(onSearch, Modifier.size(48.dp)) { Icon(if (searchOpen) Icons.Default.Close else Icons.Default.Search, if (searchOpen) "검색 닫기" else "음악 검색") }
-        IconButton(onFolders, Modifier.size(48.dp)) { Icon(Icons.Default.Folder, if (foldersOpen) "곡 목록 보기" else "폴더 보기", tint = if (foldersOpen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface) }
+        IconButton(onDeviceFolders, Modifier.size(48.dp)) {
+            Icon(
+                Icons.Default.Folder,
+                if (folderViewMode == FolderViewMode.DEVICE) "곡 목록 보기" else "기기 폴더 보기",
+                tint = if (folderViewMode == FolderViewMode.DEVICE) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        IconButton(onAutomaticFolders, Modifier.size(48.dp)) {
+            Icon(
+                Icons.Default.FilterAlt,
+                if (folderViewMode == FolderViewMode.AUTOMATIC) "곡 목록 보기" else "자동 분류 폴더 보기",
+                tint = if (folderViewMode == FolderViewMode.AUTOMATIC) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+            )
+        }
         IconButton(onRefresh, Modifier.size(48.dp)) { Icon(Icons.Default.Refresh, "파일 목록 새로고침") }
         IconButton(onSettings, Modifier.size(48.dp)) { Icon(Icons.Default.Settings, "재생 설정") }
     }
@@ -290,19 +396,19 @@ private fun SearchField(query: String, onQueryChange: (String) -> Unit, onClose:
 }
 
 @Composable
-private fun SelectedFolderRow(folder: String, onClear: () -> Unit) {
+private fun SelectedDeviceFolderRow(folder: String, onClear: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(8.dp))
-        Text("폴더: $folder", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text("기기 폴더: $folder", Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         TextButton(onClear) { Text("전체") }
     }
 }
 
 @Composable
-private fun FolderList(folders: List<Pair<String, List<AudioTrack>>>, modifier: Modifier, onSelectFolder: (String) -> Unit) {
+private fun DeviceFolderList(folders: List<Pair<String, List<AudioTrack>>>, modifier: Modifier, onSelectFolder: (String) -> Unit) {
     LazyColumn(modifier) {
-        item { Text("폴더", Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMedium) }
+        item { Text("기기 폴더", Modifier.padding(start = 16.dp, top = 8.dp, bottom = 4.dp), style = MaterialTheme.typography.titleMedium) }
         items(folders, key = { it.first }) { (folder, folderTracks) ->
             Row(
                 Modifier.fillMaxWidth().clickable(role = Role.Button) { onSelectFolder(folder) }.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -321,6 +427,77 @@ private fun FolderList(folders: List<Pair<String, List<AudioTrack>>>, modifier: 
 }
 
 @Composable
+private fun SelectedClassificationFolderRow(folder: ClassificationFolder, onClear: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Default.FilterAlt, null, tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(8.dp))
+        Column(Modifier.weight(1f)) {
+            Text("자동 분류: ${folder.name}", maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("검색어: ${folder.keyword}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        TextButton(onClear) { Text("전체") }
+    }
+}
+
+@Composable
+private fun ClassificationFolderList(
+    folders: List<ClassificationFolder>,
+    tracks: List<AudioTrack>,
+    selectedExtensions: Set<String>,
+    modifier: Modifier,
+    onAddFolder: () -> Unit,
+    onSelectFolder: (ClassificationFolder) -> Unit,
+    onRemoveFolder: (ClassificationFolder) -> Unit,
+) {
+    LazyColumn(modifier) {
+        item {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text("자동 분류 폴더", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "새 파일이 검색어와 설정된 확장자에 맞으면 자동으로 여기에 표시됩니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(12.dp))
+                Button(onClick = onAddFolder) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("분류 폴더 추가")
+                }
+            }
+        }
+        if (folders.isEmpty()) {
+            item {
+                Text(
+                    "아직 만든 자동 분류 폴더가 없습니다.",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        items(folders, key = { it.id }) { folder ->
+            val matchedCount = tracks.count { it.matchesClassificationFolder(folder, selectedExtensions) }
+            Row(
+                Modifier.fillMaxWidth().clickable(role = Role.Button) { onSelectFolder(folder) }.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.FilterAlt, null, tint = MaterialTheme.colorScheme.primary)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(folder.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("검색어: ${folder.keyword} · ${matchedCount}개 파일", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                IconButton(onClick = { onRemoveFolder(folder) }, modifier = Modifier.size(48.dp)) {
+                    Icon(Icons.Default.Delete, contentDescription = "${folder.name} 자동 분류 폴더 삭제", tint = MaterialTheme.colorScheme.error)
+                }
+            }
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+        }
+    }
+}
+
+@Composable
 private fun EmptyLibrary(modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("표시할 오디오 파일이 없습니다", style = MaterialTheme.typography.titleMedium)
@@ -330,13 +507,19 @@ private fun EmptyLibrary(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun EmptySearchResult(modifier: Modifier, query: String, selectedFolder: String?) {
+private fun EmptySearchResult(
+    modifier: Modifier,
+    query: String,
+    selectedDeviceFolder: String?,
+    selectedClassificationFolder: ClassificationFolder?,
+) {
     Column(modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text("표시할 파일이 없습니다", style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
         val message = when {
             query.isNotBlank() -> "\"$query\"와 일치하는 음악이나 녹음이 없습니다."
-            selectedFolder != null -> "$selectedFolder 폴더에 표시할 파일이 없습니다."
+            selectedClassificationFolder != null -> "${selectedClassificationFolder.name} 자동 분류 폴더에 표시할 파일이 없습니다."
+            selectedDeviceFolder != null -> "$selectedDeviceFolder 기기 폴더에 표시할 파일이 없습니다."
             else -> "다른 검색어나 폴더를 선택해 보세요."
         }
         Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -538,12 +721,14 @@ private fun SettingsDialog(
     onSetSkipSeconds: (Int) -> Unit,
     selectedUnlockMethod: UnlockMethod,
     onSetUnlockMethod: (UnlockMethod) -> Unit,
+    selectedAutoClassificationExtensions: Set<String>,
+    onSetAutoClassificationExtensions: (Set<String>) -> Unit,
     onDismiss: () -> Unit,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss, title = { Text("재생 설정") },
         text = {
-            Column {
+            Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
                 Text("앞·뒤 탐색 시간", style = MaterialTheme.typography.titleSmall)
                 PlayerViewModel.SKIP_INTERVALS.sorted().forEach { seconds ->
                     Row(Modifier.fillMaxWidth().clickable { onSetSkipSeconds(seconds) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -559,9 +744,97 @@ private fun SettingsDialog(
                         Text(method.settingsLabel(), Modifier.padding(start = 8.dp))
                     }
                 }
+                Spacer(Modifier.height(16.dp))
+                Text("자동 분류 파일 형식", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "선택한 형식의 새 오디오 파일만 자동 분류 폴더 규칙에 적용됩니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                PlayerViewModel.SUPPORTED_AUTO_CLASSIFICATION_EXTENSIONS.forEach { extension ->
+                    val isSelected = extension in selectedAutoClassificationExtensions
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            onSetAutoClassificationExtensions(
+                                selectedAutoClassificationExtensions.toMutableSet().apply {
+                                    if (isSelected) remove(extension) else add(extension)
+                                },
+                            )
+                        }.padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(
+                            checked = isSelected,
+                            onCheckedChange = { checked ->
+                                onSetAutoClassificationExtensions(
+                                    selectedAutoClassificationExtensions.toMutableSet().apply {
+                                        if (checked) add(extension) else remove(extension)
+                                    },
+                                )
+                            },
+                        )
+                        Text(".$extension", Modifier.padding(start = 8.dp))
+                    }
+                }
             }
         },
         confirmButton = { TextButton(onDismiss) { Text("완료") } },
+    )
+}
+
+@Composable
+private fun ClassificationFolderDialog(
+    selectedExtensions: Set<String>,
+    onAdd: (String, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var name by remember { mutableStateOf("") }
+    var keyword by remember { mutableStateOf("") }
+    val canSave = name.isNotBlank() && keyword.isNotBlank()
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("자동 분류 폴더 추가") },
+        text = {
+            Column {
+                Text(
+                    "파일을 옮기지 않고, 새로 인식된 파일을 이 규칙에 따라 모아 보여 줍니다.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("폴더 이름") },
+                )
+                Spacer(Modifier.height(10.dp))
+                OutlinedTextField(
+                    value = keyword,
+                    onValueChange = { keyword = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text("파일명 검색어") },
+                    supportingText = { Text("예: 컴파일러구성론") },
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    if (selectedExtensions.isEmpty()) {
+                        "현재 자동 분류 파일 형식이 선택되지 않았습니다. 설정에서 선택해 주세요."
+                    } else {
+                        "적용 형식: ${selectedExtensions.sorted().joinToString(separator = ", ") { ".${it.lowercase()}" }}"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = { onAdd(name, keyword) }, enabled = canSave) { Text("추가") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("취소") } },
     )
 }
 
@@ -579,6 +852,14 @@ private fun AudioTrack.folderName(): String {
     val path = relativePath.trim().trimEnd('/')
     return path.ifBlank { "기타" }
 }
+
+private fun AudioTrack.matchesClassificationFolder(
+    folder: ClassificationFolder,
+    selectedExtensions: Set<String>,
+): Boolean =
+    fileExtension() in selectedExtensions && title.contains(folder.keyword, ignoreCase = true)
+
+private fun AudioTrack.fileExtension(): String = title.substringAfterLast('.', "").uppercase()
 
 private fun formatDuration(durationMs: Long): String {
     val totalSeconds = (durationMs.coerceAtLeast(0L) / 1_000L).toInt()

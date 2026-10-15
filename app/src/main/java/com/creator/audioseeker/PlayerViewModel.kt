@@ -25,6 +25,9 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application
@@ -38,6 +41,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var pendingDeletion: Uri? = null
 
     var tracks: List<AudioTrack> by mutableStateOf(emptyList())
+        private set
+
+    var classificationFolders: List<ClassificationFolder> by mutableStateOf(loadClassificationFolders())
+        private set
+
+    var autoClassificationExtensions: Set<String> by mutableStateOf(
+        preferences.getStringSet(KEY_AUTO_CLASSIFICATION_EXTENSIONS, DEFAULT_AUTO_CLASSIFICATION_EXTENSIONS)
+            ?.map { it.uppercase() }
+            ?.toSet()
+            ?: DEFAULT_AUTO_CLASSIFICATION_EXTENSIONS,
+    )
         private set
 
     var playerState by mutableStateOf(PlayerUiState(
@@ -152,6 +166,30 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playerState = playerState.copy(unlockMethod = method)
     }
 
+    fun addClassificationFolder(name: String, keyword: String) {
+        val trimmedName = name.trim()
+        val trimmedKeyword = keyword.trim()
+        if (trimmedName.isBlank() || trimmedKeyword.isBlank()) return
+
+        classificationFolders = classificationFolders + ClassificationFolder(
+            id = UUID.randomUUID().toString(),
+            name = trimmedName,
+            keyword = trimmedKeyword,
+        )
+        saveClassificationFolders()
+    }
+
+    fun removeClassificationFolder(folder: ClassificationFolder) {
+        classificationFolders = classificationFolders.filterNot { it.id == folder.id }
+        saveClassificationFolders()
+    }
+
+    fun updateAutoClassificationExtensions(extensions: Set<String>) {
+        val normalized = extensions.map { it.uppercase() }.toSet()
+        preferences.edit().putStringSet(KEY_AUTO_CLASSIFICATION_EXTENSIONS, normalized).apply()
+        autoClassificationExtensions = normalized
+    }
+
     fun updateProgress() = syncPlayerState()
 
     fun createDeleteRequest(track: AudioTrack): IntentSender {
@@ -234,13 +272,50 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun loadClassificationFolders(): List<ClassificationFolder> = runCatching {
+        val savedRules = preferences.getString(KEY_CLASSIFICATION_FOLDERS, "[]") ?: "[]"
+        val jsonArray = JSONArray(savedRules)
+        buildList {
+            for (index in 0 until jsonArray.length()) {
+                val item = jsonArray.optJSONObject(index) ?: continue
+                val id = item.optString("id").trim()
+                val name = item.optString("name").trim()
+                val keyword = item.optString("keyword").trim()
+                if (id.isNotBlank() && name.isNotBlank() && keyword.isNotBlank()) {
+                    add(ClassificationFolder(id, name, keyword))
+                }
+            }
+        }
+    }.getOrDefault(emptyList())
+
+    private fun saveClassificationFolders() {
+        val savedRules = JSONArray().apply {
+            classificationFolders.forEach { folder ->
+                put(
+                    JSONObject().apply {
+                        put("id", folder.id)
+                        put("name", folder.name)
+                        put("keyword", folder.keyword)
+                    },
+                )
+            }
+        }
+        preferences.edit().putString(KEY_CLASSIFICATION_FOLDERS, savedRules.toString()).apply()
+    }
+
     companion object {
         const val DEFAULT_SKIP_SECONDS = 10
         val SKIP_INTERVALS = setOf(3, 5, 10, 15, 30)
+        val SUPPORTED_AUTO_CLASSIFICATION_EXTENSIONS = listOf(
+            "MP3", "M4A", "WAV", "FLAC", "AAC", "OGG", "OPUS", "WMA",
+        )
+        val DEFAULT_AUTO_CLASSIFICATION_EXTENSIONS = SUPPORTED_AUTO_CLASSIFICATION_EXTENSIONS.toSet()
 
         private const val PREFERENCES_NAME = "audioseeker_preferences"
         private const val KEY_SKIP_SECONDS = "skip_seconds"
         private const val KEY_CONTROLS_LOCKED = "controls_locked"
         private const val KEY_UNLOCK_METHOD = "unlock_method"
+        private const val KEY_CLASSIFICATION_FOLDERS = "classification_folders"
+        private const val KEY_AUTO_CLASSIFICATION_EXTENSIONS = "auto_classification_extensions"
     }
 }

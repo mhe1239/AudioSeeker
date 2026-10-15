@@ -56,6 +56,11 @@ class MainActivity : ComponentActivity() {
                     onSetSkipSeconds = playerViewModel::setSkipSeconds,
                     onSetControlsLocked = playerViewModel::setControlsLocked,
                     onSetUnlockMethod = playerViewModel::setUnlockMethod,
+                    classificationFolders = playerViewModel.classificationFolders,
+                    autoClassificationExtensions = playerViewModel.autoClassificationExtensions,
+                    onAddClassificationFolder = playerViewModel::addClassificationFolder,
+                    onRemoveClassificationFolder = playerViewModel::removeClassificationFolder,
+                    onSetAutoClassificationExtensions = playerViewModel::updateAutoClassificationExtensions,
                     onDeleteTrack = { track ->
                         deleteLauncher.launch(
                             IntentSenderRequest.Builder(playerViewModel.createDeleteRequest(track)).build(),
