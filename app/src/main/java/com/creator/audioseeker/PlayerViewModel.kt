@@ -97,6 +97,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             val loadedTracks = queryTracks(app.contentResolver)
             withContext(Dispatchers.Main) {
                 tracks = loadedTracks
+                classifyNewTracks(loadedTracks)
             }
         }
     }
@@ -171,10 +172,14 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val trimmedKeyword = keyword.trim()
         if (trimmedName.isBlank() || trimmedKeyword.isBlank()) return
 
+        val filesAtCreation = tracks.map { it.id }.toSet()
         classificationFolders = classificationFolders + ClassificationFolder(
             id = UUID.randomUUID().toString(),
             name = trimmedName,
             keyword = trimmedKeyword,
+            trackIds = tracks.filter { it.matchesClassificationKeyword(trimmedKeyword) }.map { it.id }.toSet(),
+            examinedTrackIds = filesAtCreation,
+            isInitialized = true,
         )
         saveClassificationFolders()
     }
@@ -283,7 +288,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val name = item.optString("name").trim()
                 val keyword = item.optString("keyword").trim()
                 if (id.isNotBlank() && name.isNotBlank() && keyword.isNotBlank()) {
-                    add(ClassificationFolder(id, name, keyword))
+                    add(
+                        ClassificationFolder(
+                            id = id,
+                            name = name,
+                            keyword = keyword,
+                            trackIds = item.optLongSet("trackIds"),
+                            examinedTrackIds = item.optLongSet("examinedTrackIds"),
+                            isInitialized = item.optBoolean("isInitialized", false),
+                        ),
+                    )
                 }
             }
         }
@@ -297,11 +311,54 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                         put("id", folder.id)
                         put("name", folder.name)
                         put("keyword", folder.keyword)
+                        put("trackIds", JSONArray(folder.trackIds.sorted()))
+                        put("examinedTrackIds", JSONArray(folder.examinedTrackIds.sorted()))
+                        put("isInitialized", folder.isInitialized)
                     },
                 )
             }
         }
         preferences.edit().putString(KEY_CLASSIFICATION_FOLDERS, savedRules.toString()).apply()
+    }
+
+    private fun classifyNewTracks(loadedTracks: List<AudioTrack>) {
+        if (classificationFolders.isEmpty()) return
+
+        val updatedFolders = classificationFolders.map { folder ->
+            val tracksToCheck = if (folder.isInitialized) {
+                loadedTracks.filter { it.id !in folder.examinedTrackIds }
+            } else {
+                // Folders saved by an earlier app version receive one initial scan on upgrade.
+                loadedTracks
+            }
+            if (tracksToCheck.isEmpty() && folder.isInitialized) return@map folder
+
+            folder.copy(
+                trackIds = folder.trackIds + tracksToCheck
+                    .filter { it.matchesClassificationKeyword(folder.keyword) }
+                    .map { it.id },
+                examinedTrackIds = folder.examinedTrackIds + tracksToCheck.map { it.id },
+                isInitialized = true,
+            )
+        }
+        if (updatedFolders != classificationFolders) {
+            classificationFolders = updatedFolders
+            saveClassificationFolders()
+        }
+    }
+
+    private fun AudioTrack.matchesClassificationKeyword(keyword: String): Boolean =
+        fileExtension() in autoClassificationExtensions && title.contains(keyword, ignoreCase = true)
+
+    private fun AudioTrack.fileExtension(): String = title.substringAfterLast('.', "").uppercase()
+
+    private fun JSONObject.optLongSet(key: String): Set<Long> {
+        val values = optJSONArray(key) ?: return emptySet()
+        return buildSet {
+            for (index in 0 until values.length()) {
+                values.optLong(index, Long.MIN_VALUE).takeIf { it != Long.MIN_VALUE }?.let(::add)
+            }
+        }
     }
 
     companion object {

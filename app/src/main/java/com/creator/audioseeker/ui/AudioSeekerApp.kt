@@ -262,10 +262,12 @@ private fun LibraryScreen(
             }
         }
     }
-    val displayedTracks = remember(searchResults, selectedDeviceFolder, selectedClassificationFolder, autoClassificationExtensions) {
+    val activeClassificationFolder = classificationFolders.firstOrNull { it.id == selectedClassificationFolder?.id }
+        ?: selectedClassificationFolder
+    val displayedTracks = remember(searchResults, selectedDeviceFolder, activeClassificationFolder) {
         searchResults.filter { track ->
             (selectedDeviceFolder == null || track.folderName() == selectedDeviceFolder) &&
-                (selectedClassificationFolder == null || track.matchesClassificationFolder(selectedClassificationFolder, autoClassificationExtensions))
+                (activeClassificationFolder == null || track.id in activeClassificationFolder.trackIds)
         }
     }
     val folders = remember(searchResults) {
@@ -301,8 +303,7 @@ private fun LibraryScreen(
                 folderViewMode == FolderViewMode.DEVICE -> DeviceFolderList(folders, Modifier.weight(1f), onSelectDeviceFolder)
                 folderViewMode == FolderViewMode.AUTOMATIC -> ClassificationFolderList(
                     folders = classificationFolders,
-                    tracks = searchResults,
-                    selectedExtensions = autoClassificationExtensions,
+                    tracks = tracks,
                     modifier = Modifier.weight(1f),
                     onAddFolder = onOpenClassificationEditor,
                     onSelectFolder = onSelectClassificationFolder,
@@ -455,7 +456,6 @@ private fun SelectedClassificationFolderRow(folder: ClassificationFolder, onClea
 private fun ClassificationFolderList(
     folders: List<ClassificationFolder>,
     tracks: List<AudioTrack>,
-    selectedExtensions: Set<String>,
     modifier: Modifier,
     onAddFolder: () -> Unit,
     onSelectFolder: (ClassificationFolder) -> Unit,
@@ -467,7 +467,7 @@ private fun ClassificationFolderList(
                 Text("자동 분류 폴더", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "새 파일이 검색어와 설정된 확장자에 맞으면 자동으로 여기에 표시됩니다.",
+                    "생성할 때 현재 파일을 먼저 검사하고, 이후 새 파일만 필터에 맞으면 여기에 추가합니다.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -489,7 +489,7 @@ private fun ClassificationFolderList(
             }
         }
         items(folders, key = { it.id }) { folder ->
-            val matchedCount = tracks.count { it.matchesClassificationFolder(folder, selectedExtensions) }
+            val matchedCount = tracks.count { it.id in folder.trackIds }
             Row(
                 Modifier.fillMaxWidth().clickable(role = Role.Button) { onSelectFolder(folder) }.padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -869,7 +869,7 @@ private fun ClassificationFolderDialog(
         text = {
             Column {
                 Text(
-                    "파일을 옮기지 않고, 새로 인식된 파일을 이 규칙에 따라 모아 보여 줍니다.",
+                    "파일을 옮기지 않습니다. 생성하면 현재 파일을 먼저 검사하고, 이후 새 파일만 이 필터로 분류합니다.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -887,8 +887,8 @@ private fun ClassificationFolderDialog(
                     onValueChange = { keyword = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    label = { Text("파일명 검색어") },
-                    supportingText = { Text("예: 컴파일러구성론") },
+                    label = { Text("파일명 필터 검색어") },
+                    supportingText = { Text("예: 회의") },
                 )
                 Spacer(Modifier.height(12.dp))
                 Text(
@@ -923,14 +923,6 @@ private fun AudioTrack.folderName(): String {
     val path = relativePath.trim().trimEnd('/')
     return path.ifBlank { "기타" }
 }
-
-private fun AudioTrack.matchesClassificationFolder(
-    folder: ClassificationFolder,
-    selectedExtensions: Set<String>,
-): Boolean =
-    fileExtension() in selectedExtensions && title.contains(folder.keyword, ignoreCase = true)
-
-private fun AudioTrack.fileExtension(): String = title.substringAfterLast('.', "").uppercase()
 
 private fun formatDuration(durationMs: Long): String {
     val totalSeconds = (durationMs.coerceAtLeast(0L) / 1_000L).toInt()

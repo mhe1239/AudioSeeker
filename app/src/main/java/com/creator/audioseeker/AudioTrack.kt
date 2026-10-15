@@ -11,6 +11,9 @@ data class ClassificationFolder(
     val id: String,
     val name: String,
     val keyword: String,
+    val trackIds: Set<Long> = emptySet(),
+    val examinedTrackIds: Set<Long> = emptySet(),
+    val isInitialized: Boolean = false,
 )
 
 data class AudioTrack(
