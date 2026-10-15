@@ -10,7 +10,8 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@drawable/ic_audioseeker"
+        android:icon="@drawable/audioseeker_brand_icon"
+        android:roundIcon="@drawable/audioseeker_brand_icon"
         android:label="AudioSeeker"
         android:resizeableActivity="true"
         android:theme="@style/Theme.AudioSeeker">

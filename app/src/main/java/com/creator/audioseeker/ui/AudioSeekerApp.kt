@@ -1,7 +1,10 @@
 package com.creator.audioseeker.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -24,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -53,6 +57,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -64,14 +69,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.creator.audioseeker.AudioTrack
 import com.creator.audioseeker.PlayerUiState
 import com.creator.audioseeker.PlayerViewModel
+import com.creator.audioseeker.R
 import com.creator.audioseeker.UnlockMethod
 import kotlinx.coroutines.delay
 
@@ -108,7 +117,7 @@ fun AudioSeekerApp(
         }
     }
 
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         if (!hasAudioPermission) {
             AudioPermissionScreen(onRequestAudioPermission)
         } else {
@@ -306,7 +315,7 @@ private fun FolderList(folders: List<Pair<String, List<AudioTrack>>>, modifier: 
                     Text("${folderTracks.size}개 파일", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         }
     }
 }
@@ -342,20 +351,25 @@ private fun TrackRow(
     onPlay: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    Row(
-        Modifier.fillMaxWidth().clickable(enabled = selectionEnabled, role = Role.Button, onClick = onPlay).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Default.MusicNote, null, Modifier.size(32.dp), if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.size(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${track.artist} · ${formatDuration(track.durationMs)}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(track.folderName(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    val background = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+    val titleColor = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+    Surface(color = background) {
+        Row(
+            Modifier.fillMaxWidth().clickable(enabled = selectionEnabled, role = Role.Button, onClick = onPlay).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.MusicNote, null, Modifier.size(32.dp), if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.size(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = titleColor, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal)
+                Text("${track.artist} · ${formatDuration(track.durationMs)}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (isCurrent) Text("현재 재생 중", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Medium)
+                else Text(track.folderName(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            IconButton(onDelete, Modifier.size(48.dp)) { Icon(Icons.Default.Delete, "${track.title} 삭제", tint = MaterialTheme.colorScheme.error) }
         }
-        IconButton(onDelete, Modifier.size(48.dp)) { Icon(Icons.Default.Delete, "${track.title} 삭제") }
     }
-    HorizontalDivider(color = MaterialTheme.colorScheme.surfaceVariant)
+    HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 }
 
 @Composable
@@ -366,7 +380,9 @@ private fun PlayerPanel(
 ) {
     Card(
         Modifier.fillMaxWidth().navigationBarsPadding(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shape = MaterialTheme.shapes.large,
     ) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = if (compact) 8.dp else 16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -404,11 +420,15 @@ private fun FocusedPlayerScreen(
         Spacer(Modifier.height(28.dp))
         Card(
             Modifier.fillMaxWidth().aspectRatio(1f), shape = RoundedCornerShape(32.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
         ) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.MusicNote, null, Modifier.size(112.dp), MaterialTheme.colorScheme.primary)
-            }
+            Image(
+                painter = painterResource(R.drawable.audioseeker_brand_icon),
+                contentDescription = "AudioSeeker 아이콘",
+                modifier = Modifier.fillMaxSize().padding(20.dp),
+                contentScale = ContentScale.Fit,
+            )
         }
         Spacer(Modifier.height(32.dp))
         Text(track.title, style = MaterialTheme.typography.headlineSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -434,6 +454,11 @@ private fun PlaybackProgress(trackAvailable: Boolean, playerState: PlayerUiState
         value = playerState.currentPositionMs.coerceIn(0L, duration).toFloat(), onValueChange = { onSeekTo(it.toLong()) },
         valueRange = 0f..duration.toFloat(), enabled = trackAvailable && !playerState.controlsLocked,
         modifier = Modifier.fillMaxWidth().semantics { contentDescription = "재생 위치" },
+        colors = SliderDefaults.colors(
+            thumbColor = MaterialTheme.colorScheme.secondary,
+            activeTrackColor = MaterialTheme.colorScheme.primary,
+            inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
     )
     Row(Modifier.fillMaxWidth()) {
         Text(formatDuration(playerState.currentPositionMs), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -492,8 +517,18 @@ private fun PlayerButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, enabled: Boolean,
     prominent: Boolean = false, onClick: () -> Unit,
 ) {
-    IconButton(onClick, Modifier.size(if (prominent) 56.dp else 48.dp), enabled) {
-        Icon(icon, description, Modifier.size(if (prominent) 32.dp else 26.dp), if (prominent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface)
+    val modifier = if (prominent) {
+        Modifier.size(56.dp).background(MaterialTheme.colorScheme.primary, CircleShape)
+    } else {
+        Modifier.size(48.dp)
+    }
+    IconButton(onClick = onClick, modifier = modifier, enabled = enabled) {
+        Icon(
+            icon,
+            description,
+            Modifier.size(if (prominent) 32.dp else 26.dp),
+            if (prominent) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
