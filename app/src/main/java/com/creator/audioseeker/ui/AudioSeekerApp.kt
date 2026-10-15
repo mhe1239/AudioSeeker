@@ -299,12 +299,29 @@ private fun LibraryScreen(
     val folders = remember(searchResults) {
         searchResults.groupBy { it.folderName() }.toList().sortedBy { it.first.lowercase() }
     }
+    val headerSubtitle = when {
+        selectedDeviceFolder != null -> "기기 폴더: $selectedDeviceFolder"
+        selectedClassificationFolder != null -> "자동 분류: ${selectedClassificationFolder.name}"
+        folderViewMode == FolderViewMode.DEVICE -> "기기 폴더별 음악과 녹음"
+        folderViewMode == FolderViewMode.AUTOMATIC -> "자동 분류 폴더"
+        else -> "기기의 음악과 녹음"
+    }
+    val showBackToAll = folderViewMode != null || selectedDeviceFolder != null || selectedClassificationFolder != null
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val isCompactHeight = maxHeight < 420.dp
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
             AppHeader(
-                folderViewMode = folderViewMode, searchOpen = searchOpen, onRefresh = onRefresh,
+                folderViewMode = folderViewMode,
+                searchOpen = searchOpen,
+                subtitle = headerSubtitle,
+                showBackToAll = showBackToAll,
+                onBackToAll = {
+                    onSetFolderViewMode(null)
+                    onClearDeviceFolder()
+                    onClearClassificationFolder()
+                },
+                onRefresh = onRefresh,
                 onSearch = { onSetSearchOpen(!searchOpen) },
                 onDeviceFolders = {
                     onSetFolderViewMode(if (folderViewMode == FolderViewMode.DEVICE) null else FolderViewMode.DEVICE)
@@ -380,23 +397,34 @@ private fun AudioPermissionScreen(onRequestAudioPermission: () -> Unit) {
 
 @Composable
 private fun AppHeader(
-    folderViewMode: FolderViewMode?, searchOpen: Boolean, onRefresh: () -> Unit,
+    folderViewMode: FolderViewMode?, searchOpen: Boolean, subtitle: String,
+    showBackToAll: Boolean, onBackToAll: () -> Unit, onRefresh: () -> Unit,
     onSearch: () -> Unit, onDeviceFolders: () -> Unit, onAutomaticFolders: () -> Unit, onSettings: () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (showBackToAll) {
+            HelpIconButton("전체 음악으로 돌아가기", onBackToAll, Modifier.size(48.dp)) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = MaterialTheme.colorScheme.onSurface)
+            }
+        }
+        Image(
+            painter = painterResource(R.drawable.audioseeker_brand_icon),
+            contentDescription = "AudioSeeker",
+            modifier = Modifier.size(36.dp),
+            contentScale = ContentScale.Fit,
+        )
+        Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("AudioSeeker", style = MaterialTheme.typography.headlineSmall)
+            Text("AudioSeeker", style = MaterialTheme.typography.titleMedium)
             Text(
-                when (folderViewMode) {
-                    FolderViewMode.DEVICE -> "기기 폴더별 음악과 녹음"
-                    FolderViewMode.AUTOMATIC -> "자동 분류 폴더"
-                    null -> "기기의 음악과 녹음"
-                },
+                subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         HelpIconButton(
