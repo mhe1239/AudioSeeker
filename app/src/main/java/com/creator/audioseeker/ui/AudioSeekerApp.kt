@@ -117,6 +117,7 @@ fun AudioSeekerApp(
     onSkipPrevious: () -> Unit,
     onSkipNext: () -> Unit,
     onSetSkipSeconds: (Int) -> Unit,
+    onSetPlaybackSpeed: (Float) -> Unit,
     onSetControlsLocked: (Boolean) -> Unit,
     onSetUnlockMethod: (UnlockMethod) -> Unit,
     themePreference: ThemePreference,
@@ -176,6 +177,8 @@ fun AudioSeekerApp(
                     onSetShowLockScreenArtwork = onSetShowLockScreenArtwork,
                     selectedSeconds = playerState.skipSeconds,
                     onSetSkipSeconds = onSetSkipSeconds,
+                    selectedPlaybackSpeed = playerState.playbackSpeed,
+                    onSetPlaybackSpeed = onSetPlaybackSpeed,
                     selectedUnlockMethod = playerState.unlockMethod,
                     onSetUnlockMethod = onSetUnlockMethod,
                     selectedAutoClassificationExtensions = autoClassificationExtensions,
@@ -928,6 +931,8 @@ private fun SettingsScreen(
     playerState: PlayerUiState,
     selectedSeconds: Int,
     onSetSkipSeconds: (Int) -> Unit,
+    selectedPlaybackSpeed: Float,
+    onSetPlaybackSpeed: (Float) -> Unit,
     selectedUnlockMethod: UnlockMethod,
     onSetUnlockMethod: (UnlockMethod) -> Unit,
     selectedThemePreference: ThemePreference,
@@ -993,6 +998,32 @@ private fun SettingsScreen(
                         RadioButton(selectedSeconds == seconds, onClick = { onSetSkipSeconds(seconds) })
                         Text("${seconds}초", Modifier.padding(start = 8.dp))
                     }
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("재생 속도", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "${formatPlaybackSpeed(selectedPlaybackSpeed)}배",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Slider(
+                    value = selectedPlaybackSpeed,
+                    onValueChange = onSetPlaybackSpeed,
+                    valueRange = PlayerViewModel.PLAYBACK_SPEEDS.first()..PlayerViewModel.PLAYBACK_SPEEDS.last(),
+                    steps = PlayerViewModel.PLAYBACK_SPEEDS.size - 2,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics { contentDescription = "재생 속도 ${formatPlaybackSpeed(selectedPlaybackSpeed)}배" },
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.secondary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                )
+                Row(Modifier.fillMaxWidth()) {
+                    Text("0.5배", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.weight(1f))
+                    Text("2.0배", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Spacer(Modifier.height(16.dp))
                 Text("조작 잠금 해제 방식", style = MaterialTheme.typography.titleSmall)
@@ -1132,3 +1163,5 @@ private fun formatDuration(durationMs: Long): String {
     val totalSeconds = (durationMs.coerceAtLeast(0L) / 1_000L).toInt()
     return "%d:%02d".format(totalSeconds / 60, totalSeconds % 60)
 }
+
+private fun formatPlaybackSpeed(speed: Float): String = "%.1f".format(java.util.Locale.US, speed)

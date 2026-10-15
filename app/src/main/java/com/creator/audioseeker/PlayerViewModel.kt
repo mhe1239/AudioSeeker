@@ -20,6 +20,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.compose.runtime.getValue
@@ -60,6 +61,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     var playerState by mutableStateOf(PlayerUiState(
         skipSeconds = preferences.getInt(KEY_SKIP_SECONDS, DEFAULT_SKIP_SECONDS),
+        playbackSpeed = preferences.getFloat(KEY_PLAYBACK_SPEED, DEFAULT_PLAYBACK_SPEED)
+            .coerceIn(MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED),
         controlsLocked = preferences.getBoolean(KEY_CONTROLS_LOCKED, false),
         unlockMethod = preferences.getString(KEY_UNLOCK_METHOD, null)
             ?.let { savedValue -> UnlockMethod.entries.firstOrNull { it.name == savedValue } }
@@ -100,6 +103,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             {
                 controller = runCatching { controllerFuture.get() }.getOrNull()?.also {
                     it.addListener(playerListener)
+                    it.playbackParameters = PlaybackParameters(playerState.playbackSpeed)
                 }
                 syncPlayerState()
             },
@@ -165,6 +169,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (seconds !in SKIP_INTERVALS) return
         preferences.edit().putInt(KEY_SKIP_SECONDS, seconds).apply()
         playerState = playerState.copy(skipSeconds = seconds)
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        val selectedSpeed = PLAYBACK_SPEEDS.minByOrNull { candidate ->
+            kotlin.math.abs(candidate - speed)
+        } ?: return
+        if (kotlin.math.abs(selectedSpeed - speed) > PLAYBACK_SPEED_EPSILON) return
+
+        preferences.edit().putFloat(KEY_PLAYBACK_SPEED, selectedSpeed).apply()
+        controller?.playbackParameters = PlaybackParameters(selectedSpeed)
+        playerState = playerState.copy(playbackSpeed = selectedSpeed)
     }
 
     fun setControlsLocked(locked: Boolean) {
@@ -255,6 +270,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentTrackId = currentTrackId,
             currentPositionMs = mediaController.currentPosition.coerceAtLeast(0L),
             durationMs = duration,
+            playbackSpeed = mediaController.playbackParameters.speed,
         )
     }
 
@@ -476,8 +492,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     companion object {
         const val DEFAULT_SKIP_SECONDS = 10
+        const val DEFAULT_PLAYBACK_SPEED = 1f
         private const val LOCK_SCREEN_ARTWORK_SIZE = 512
+        private const val MIN_PLAYBACK_SPEED = 0.5f
+        private const val MAX_PLAYBACK_SPEED = 2f
+        private const val PLAYBACK_SPEED_EPSILON = 0.001f
         val SKIP_INTERVALS = setOf(3, 5, 10, 15, 30)
+        val PLAYBACK_SPEEDS = (5..20).map { it / 10f }
         val SUPPORTED_AUTO_CLASSIFICATION_EXTENSIONS = listOf(
             "MP3", "M4A", "WAV", "FLAC", "AAC", "OGG", "OPUS", "WMA",
         )
@@ -485,6 +506,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         private const val PREFERENCES_NAME = "audioseeker_preferences"
         private const val KEY_SKIP_SECONDS = "skip_seconds"
+        private const val KEY_PLAYBACK_SPEED = "playback_speed"
         private const val KEY_CONTROLS_LOCKED = "controls_locked"
         private const val KEY_UNLOCK_METHOD = "unlock_method"
         private const val KEY_THEME_PREFERENCE = "theme_preference"

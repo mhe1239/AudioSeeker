@@ -38,6 +38,7 @@ data class PlayerUiState(
     val currentPositionMs: Long = 0L,
     val durationMs: Long = 0L,
     val skipSeconds: Int = 10,
+    val playbackSpeed: Float = 1f,
     val controlsLocked: Boolean = false,
     val unlockMethod: UnlockMethod = UnlockMethod.DOUBLE_TAP,
 )

@@ -54,6 +54,7 @@ class MainActivity : ComponentActivity() {
                     onSkipPrevious = playerViewModel::skipToPrevious,
                     onSkipNext = playerViewModel::skipToNext,
                     onSetSkipSeconds = playerViewModel::setSkipSeconds,
+                    onSetPlaybackSpeed = playerViewModel::setPlaybackSpeed,
                     onSetControlsLocked = playerViewModel::setControlsLocked,
                     onSetUnlockMethod = playerViewModel::setUnlockMethod,
                     themePreference = playerViewModel.themePreference,
