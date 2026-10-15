@@ -1152,7 +1152,8 @@ private fun UnlockMethod.settingsLabel(): String = when (this) {
 
 private fun ThemePreference.settingsLabel(): String = when (this) {
     ThemePreference.SYSTEM -> "시스템 설정 사용"
-    ThemePreference.DARK -> "다크 모드"
+    ThemePreference.DARK -> "청록 다크 모드"
+    ThemePreference.STANDARD_DARK -> "표준 다크 모드"
     ThemePreference.LIGHT -> "라이트 모드"
 }
 

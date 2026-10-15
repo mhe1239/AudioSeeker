@@ -30,7 +30,7 @@ private val LightColors = lightColorScheme(
     onError = Color.White,
 )
 
-private val DarkColors = darkColorScheme(
+private val TealDarkColors = darkColorScheme(
     primary = Color(0xFF58D6C2),
     onPrimary = Color(0xFF00201C),
     primaryContainer = Color(0xFF005047),
@@ -48,11 +48,29 @@ private val DarkColors = darkColorScheme(
     onError = Color(0xFF690005),
 )
 
+private val StandardDarkColors = darkColorScheme(
+    primary = Color(0xFF80CBC4),
+    onPrimary = Color(0xFF003731),
+    primaryContainer = Color(0xFF005047),
+    onPrimaryContainer = Color(0xFFA7F3D0),
+    secondary = Color(0xFFF6C35B),
+    onSecondary = Color(0xFF3A2A00),
+    background = Color(0xFF121212),
+    onBackground = Color(0xFFE6E1E5),
+    surface = Color(0xFF1E1E1E),
+    onSurface = Color(0xFFE6E1E5),
+    surfaceVariant = Color(0xFF2A2A2A),
+    onSurfaceVariant = Color(0xFFCAC4D0),
+    outline = Color(0xFF938F99),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005),
+)
+
 @Composable
 fun AudioSeekerTheme(themePreference: ThemePreference, content: @Composable () -> Unit) {
-    val darkTheme = when (themePreference) {
+    val useDarkSystemBars = when (themePreference) {
         ThemePreference.SYSTEM -> isSystemInDarkTheme()
-        ThemePreference.DARK -> true
+        ThemePreference.DARK, ThemePreference.STANDARD_DARK -> true
         ThemePreference.LIGHT -> false
     }
     val view = LocalView.current
@@ -60,13 +78,18 @@ fun AudioSeekerTheme(themePreference: ThemePreference, content: @Composable () -
         SideEffect {
             val window = (view.context as Activity).window
             WindowCompat.getInsetsController(window, view).apply {
-                isAppearanceLightStatusBars = !darkTheme
-                isAppearanceLightNavigationBars = !darkTheme
+                isAppearanceLightStatusBars = !useDarkSystemBars
+                isAppearanceLightNavigationBars = !useDarkSystemBars
             }
         }
     }
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = when (themePreference) {
+            ThemePreference.SYSTEM -> if (isSystemInDarkTheme()) TealDarkColors else LightColors
+            ThemePreference.DARK -> TealDarkColors
+            ThemePreference.STANDARD_DARK -> StandardDarkColors
+            ThemePreference.LIGHT -> LightColors
+        },
         content = content,
     )
 }

@@ -10,6 +10,7 @@ enum class UnlockMethod {
 enum class ThemePreference {
     SYSTEM,
     DARK,
+    STANDARD_DARK,
     LIGHT,
 }
 
