@@ -164,6 +164,27 @@ fun AudioSeekerApp(
                     onSkipNext = onSkipNext,
                     onToggleLock = { onSetControlsLocked(!playerState.controlsLocked) },
                 )
+            } else if (settingsOpen) {
+                SettingsScreen(
+                    currentTrack = currentTrack,
+                    playerState = playerState,
+                    selectedThemePreference = themePreference,
+                    onSetThemePreference = onSetThemePreference,
+                    selectedSeconds = playerState.skipSeconds,
+                    onSetSkipSeconds = onSetSkipSeconds,
+                    selectedUnlockMethod = playerState.unlockMethod,
+                    onSetUnlockMethod = onSetUnlockMethod,
+                    selectedAutoClassificationExtensions = autoClassificationExtensions,
+                    onSetAutoClassificationExtensions = onSetAutoClassificationExtensions,
+                    onBack = { settingsOpen = false },
+                    onOpenFocus = { focusOpen = true },
+                    onTogglePlayback = onTogglePlayback,
+                    onSeekTo = onSeekTo,
+                    onSeekBy = onSeekBy,
+                    onSkipPrevious = onSkipPrevious,
+                    onSkipNext = onSkipNext,
+                    onToggleLock = { onSetControlsLocked(!playerState.controlsLocked) },
+                )
             } else {
                 LibraryScreen(
                     tracks = tracks,
@@ -212,20 +233,6 @@ fun AudioSeekerApp(
                 )
             }
         }
-    }
-
-    if (settingsOpen) {
-        SettingsDialog(
-            selectedSeconds = playerState.skipSeconds,
-            onSetSkipSeconds = onSetSkipSeconds,
-            selectedUnlockMethod = playerState.unlockMethod,
-            onSetUnlockMethod = onSetUnlockMethod,
-            selectedThemePreference = themePreference,
-            onSetThemePreference = onSetThemePreference,
-            selectedAutoClassificationExtensions = autoClassificationExtensions,
-            onSetAutoClassificationExtensions = onSetAutoClassificationExtensions,
-            onDismiss = { settingsOpen = false },
-        )
     }
 
     if (classificationEditorOpen) {
@@ -887,7 +894,9 @@ private fun rememberBelowTooltipPositionProvider(): PopupPositionProvider {
 }
 
 @Composable
-private fun SettingsDialog(
+private fun SettingsScreen(
+    currentTrack: AudioTrack?,
+    playerState: PlayerUiState,
     selectedSeconds: Int,
     onSetSkipSeconds: (Int) -> Unit,
     selectedUnlockMethod: UnlockMethod,
@@ -896,12 +905,32 @@ private fun SettingsDialog(
     onSetThemePreference: (ThemePreference) -> Unit,
     selectedAutoClassificationExtensions: Set<String>,
     onSetAutoClassificationExtensions: (Set<String>) -> Unit,
-    onDismiss: () -> Unit,
+    onBack: () -> Unit,
+    onOpenFocus: () -> Unit,
+    onTogglePlayback: () -> Unit,
+    onSeekTo: (Long) -> Unit,
+    onSeekBy: (Int) -> Unit,
+    onSkipPrevious: () -> Unit,
+    onSkipNext: () -> Unit,
+    onToggleLock: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss, title = { Text("앱 설정") },
-        text = {
-            Column(Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState())) {
+    BackHandler(onBack = onBack)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val isCompactHeight = maxHeight < 420.dp
+        Column(Modifier.fillMaxSize().statusBarsPadding()) {
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                HelpIconButton("라이브러리로 돌아가기", onBack, Modifier.size(48.dp)) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = MaterialTheme.colorScheme.onSurface)
+                }
+                Spacer(Modifier.width(8.dp))
+                Text("앱 설정", style = MaterialTheme.typography.headlineSmall)
+            }
+            Column(
+                Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 12.dp),
+            ) {
                 Text("화면 모드", style = MaterialTheme.typography.titleSmall)
                 ThemePreference.entries.forEach { preference ->
                     Row(Modifier.fillMaxWidth().clickable { onSetThemePreference(preference) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -958,9 +987,20 @@ private fun SettingsDialog(
                     }
                 }
             }
-        },
-        confirmButton = { TextButton(onDismiss) { Text("완료") } },
-    )
+            PlayerPanel(
+                track = currentTrack,
+                playerState = playerState,
+                compact = isCompactHeight,
+                onOpenFocus = onOpenFocus,
+                onTogglePlayback = onTogglePlayback,
+                onSeekTo = onSeekTo,
+                onSeekBy = onSeekBy,
+                onSkipPrevious = onSkipPrevious,
+                onSkipNext = onSkipNext,
+                onToggleLock = onToggleLock,
+            )
+        }
+    }
 }
 
 @Composable
