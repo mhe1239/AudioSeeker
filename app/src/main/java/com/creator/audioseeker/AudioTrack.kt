@@ -8,6 +8,7 @@ data class AudioTrack(
     val title: String,
     val artist: String,
     val durationMs: Long,
+    val relativePath: String,
 )
 
 data class PlayerUiState(

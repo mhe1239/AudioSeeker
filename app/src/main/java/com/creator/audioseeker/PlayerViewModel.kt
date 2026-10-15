@@ -186,6 +186,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.DURATION,
+            MediaStore.Audio.Media.RELATIVE_PATH,
         )
         val selection = "${MediaStore.Audio.Media.DURATION} > 0"
         val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
@@ -202,6 +203,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val titleColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
                 val artistColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
                 val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                val relativePathColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idColumn)
@@ -215,6 +217,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                             title = cursor.getString(titleColumn).orEmpty().ifBlank { "이름 없는 오디오" },
                             artist = cursor.getString(artistColumn).orEmpty().ifBlank { "알 수 없는 아티스트" },
                             durationMs = cursor.getLong(durationColumn),
+                            relativePath = cursor.getString(relativePathColumn).orEmpty(),
                         ),
                     )
                 }
