@@ -71,4 +71,3 @@ exit /b %ERRORLEVEL%
 @rem Fallback exit code when a script failure happened
 if not "" == "%GRADLE_EXIT_CONSOLE%" exit 1
 exit /b 1
-
