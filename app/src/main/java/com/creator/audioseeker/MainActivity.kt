@@ -1,6 +1,7 @@
 package com.creator.audioseeker
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -20,8 +21,11 @@ import com.creator.audioseeker.ui.AudioSeekerApp
 import com.creator.audioseeker.ui.theme.AudioSeekerTheme
 
 class MainActivity : ComponentActivity() {
+    private var pendingShortcutAction by mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        pendingShortcutAction = intent?.action
         setContent {
             val playerViewModel: PlayerViewModel = viewModel()
             var hasAudioPermission by remember { mutableStateOf(hasAudioPermission()) }
@@ -37,8 +41,15 @@ class MainActivity : ComponentActivity() {
                 playerViewModel.onDeleteResult(result.resultCode == RESULT_OK)
             }
 
-            LaunchedEffect(hasAudioPermission) {
-                if (hasAudioPermission) playerViewModel.loadTracks()
+            LaunchedEffect(hasAudioPermission, pendingShortcutAction) {
+                if (!hasAudioPermission) return@LaunchedEffect
+
+                if (pendingShortcutAction == ACTION_PLAY_LAST_TRACK) {
+                    playerViewModel.playLastTrack()
+                    pendingShortcutAction = null
+                } else {
+                    playerViewModel.loadTracks()
+                }
             }
 
             AudioSeekerTheme(playerViewModel.themePreference) {
@@ -54,6 +65,9 @@ class MainActivity : ComponentActivity() {
                     onSkipPrevious = playerViewModel::skipToPrevious,
                     onSkipNext = playerViewModel::skipToNext,
                     onSetSkipSeconds = playerViewModel::setSkipSeconds,
+                    onSetPlaybackSpeed = playerViewModel::setPlaybackSpeed,
+                    onToggleShuffle = playerViewModel::toggleShuffle,
+                    onCycleRepeatMode = playerViewModel::cycleRepeatMode,
                     onSetControlsLocked = playerViewModel::setControlsLocked,
                     onSetUnlockMethod = playerViewModel::setUnlockMethod,
                     themePreference = playerViewModel.themePreference,
@@ -77,6 +91,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingShortcutAction = intent.action
+    }
+
     private fun hasAudioPermission(): Boolean =
         ContextCompat.checkSelfPermission(this, audioPermission()) == PackageManager.PERMISSION_GRANTED
 
@@ -86,4 +106,8 @@ class MainActivity : ComponentActivity() {
         } else {
             Manifest.permission.READ_EXTERNAL_STORAGE
         }
+
+    companion object {
+        const val ACTION_PLAY_LAST_TRACK = "com.creator.audioseeker.action.PLAY_LAST_TRACK"
+    }
 }

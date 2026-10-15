@@ -20,6 +20,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import androidx.compose.runtime.getValue
@@ -43,6 +44,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     private var controller: MediaController? = null
     private var pendingDeletion: Uri? = null
+    private var shortcutPlaybackRequested = false
+    private var shortcutTrackLoadInProgress = false
 
     var tracks: List<AudioTrack> by mutableStateOf(emptyList())
         private set
@@ -60,6 +63,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     var playerState by mutableStateOf(PlayerUiState(
         skipSeconds = preferences.getInt(KEY_SKIP_SECONDS, DEFAULT_SKIP_SECONDS),
+        playbackSpeed = preferences.getFloat(KEY_PLAYBACK_SPEED, DEFAULT_PLAYBACK_SPEED)
+            .coerceIn(MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED),
+        shuffleEnabled = preferences.getBoolean(KEY_SHUFFLE_ENABLED, false),
+        repeatMode = preferences.getString(KEY_REPEAT_MODE, null)
+            ?.let { savedValue -> PlaybackRepeatMode.entries.firstOrNull { it.name == savedValue } }
+            ?: PlaybackRepeatMode.PLAYLIST_ONCE,
         controlsLocked = preferences.getBoolean(KEY_CONTROLS_LOCKED, false),
         unlockMethod = preferences.getString(KEY_UNLOCK_METHOD, null)
             ?.let { savedValue -> UnlockMethod.entries.firstOrNull { it.name == savedValue } }
@@ -100,8 +109,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             {
                 controller = runCatching { controllerFuture.get() }.getOrNull()?.also {
                     it.addListener(playerListener)
+                    it.playbackParameters = PlaybackParameters(playerState.playbackSpeed)
+                    it.shuffleModeEnabled = playerState.shuffleEnabled
+                    it.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
                 }
                 syncPlayerState()
+                startShortcutPlaybackIfReady()
             },
             ContextCompat.getMainExecutor(app),
         )
@@ -118,21 +131,32 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             withContext(Dispatchers.Main) {
                 tracks = loadedTracks
                 classifyNewTracks(loadedTracks)
+                startShortcutPlaybackIfReady()
             }
         }
     }
 
-    fun playTrack(track: AudioTrack) {
+    fun playTrack(track: AudioTrack, playlist: List<AudioTrack>) {
         if (playerState.controlsLocked) return
         val mediaController = controller ?: return
-        val index = tracks.indexOfFirst { it.id == track.id }
+        val queue = playlist.distinctBy { it.id }
+        val index = queue.indexOfFirst { it.id == track.id }
         if (index < 0) return
 
-        val items = tracks.map(::createMediaItem)
+        val items = queue.map(::createMediaItem)
+        mediaController.shuffleModeEnabled = playerState.shuffleEnabled
+        mediaController.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
         mediaController.setMediaItems(items, index, 0L)
         mediaController.prepare()
         mediaController.play()
+        preferences.edit().putLong(KEY_LAST_PLAYED_TRACK_ID, track.id).apply()
         requestEmbeddedArtwork(track)
+    }
+
+    fun playLastTrack() {
+        if (playerState.controlsLocked) return
+        shortcutPlaybackRequested = true
+        startShortcutPlaybackIfReady()
     }
 
     fun togglePlayback() {
@@ -167,6 +191,37 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playerState = playerState.copy(skipSeconds = seconds)
     }
 
+    fun setPlaybackSpeed(speed: Float) {
+        val selectedSpeed = PLAYBACK_SPEEDS.minByOrNull { candidate ->
+            kotlin.math.abs(candidate - speed)
+        } ?: return
+        if (kotlin.math.abs(selectedSpeed - speed) > PLAYBACK_SPEED_EPSILON) return
+
+        preferences.edit().putFloat(KEY_PLAYBACK_SPEED, selectedSpeed).apply()
+        controller?.playbackParameters = PlaybackParameters(selectedSpeed)
+        playerState = playerState.copy(playbackSpeed = selectedSpeed)
+    }
+
+    fun toggleShuffle() {
+        if (playerState.controlsLocked) return
+        val enabled = !playerState.shuffleEnabled
+        preferences.edit().putBoolean(KEY_SHUFFLE_ENABLED, enabled).apply()
+        controller?.shuffleModeEnabled = enabled
+        playerState = playerState.copy(shuffleEnabled = enabled)
+    }
+
+    fun cycleRepeatMode() {
+        if (playerState.controlsLocked) return
+        val mode = when (playerState.repeatMode) {
+            PlaybackRepeatMode.PLAYLIST_ONCE -> PlaybackRepeatMode.PLAYLIST_REPEAT
+            PlaybackRepeatMode.PLAYLIST_REPEAT -> PlaybackRepeatMode.TRACK_REPEAT
+            PlaybackRepeatMode.TRACK_REPEAT -> PlaybackRepeatMode.PLAYLIST_ONCE
+        }
+        preferences.edit().putString(KEY_REPEAT_MODE, mode.name).apply()
+        controller?.repeatMode = mode.toMedia3RepeatMode()
+        playerState = playerState.copy(repeatMode = mode)
+    }
+
     fun setControlsLocked(locked: Boolean) {
         preferences.edit().putBoolean(KEY_CONTROLS_LOCKED, locked).apply()
         playerState = playerState.copy(controlsLocked = locked)
@@ -196,17 +251,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun addClassificationFolder(name: String, keyword: String) {
+    fun addClassificationFolder(name: String, keyword: String?) {
         val trimmedName = name.trim()
-        val trimmedKeyword = keyword.trim()
-        if (trimmedName.isBlank() || trimmedKeyword.isBlank()) return
+        val trimmedKeyword = keyword?.trim()?.takeIf { it.isNotBlank() }
+        if (trimmedName.isBlank()) return
 
         val filesAtCreation = tracks.map { it.id }.toSet()
         classificationFolders = classificationFolders + ClassificationFolder(
             id = UUID.randomUUID().toString(),
             name = trimmedName,
             keyword = trimmedKeyword,
-            trackIds = tracks.filter { it.matchesClassificationKeyword(trimmedKeyword) }.map { it.id }.toSet(),
+            trackIds = trimmedKeyword?.let { filter ->
+                tracks.filter { it.matchesClassificationKeyword(filter) }.map { it.id }.toSet()
+            } ?: emptySet(),
             examinedTrackIds = filesAtCreation,
             isInitialized = true,
         )
@@ -255,7 +312,35 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             currentTrackId = currentTrackId,
             currentPositionMs = mediaController.currentPosition.coerceAtLeast(0L),
             durationMs = duration,
+            playbackSpeed = mediaController.playbackParameters.speed,
+            shuffleEnabled = mediaController.shuffleModeEnabled,
+            repeatMode = mediaController.repeatMode.toPlaybackRepeatMode(),
         )
+    }
+
+    private fun startShortcutPlaybackIfReady() {
+        if (!shortcutPlaybackRequested || playerState.controlsLocked || controller == null) return
+
+        if (tracks.isEmpty()) {
+            if (!shortcutTrackLoadInProgress) {
+                shortcutTrackLoadInProgress = true
+                viewModelScope.launch(Dispatchers.IO) {
+                    val loadedTracks = queryTracks(app.contentResolver)
+                    withContext(Dispatchers.Main) {
+                        tracks = loadedTracks
+                        classifyNewTracks(loadedTracks)
+                        shortcutTrackLoadInProgress = false
+                        startShortcutPlaybackIfReady()
+                    }
+                }
+            }
+            return
+        }
+
+        val lastPlayedTrackId = preferences.getLong(KEY_LAST_PLAYED_TRACK_ID, NO_TRACK_ID)
+        val track = tracks.firstOrNull { it.id == lastPlayedTrackId } ?: tracks.first()
+        shortcutPlaybackRequested = false
+        playTrack(track, tracks)
     }
 
     private fun createMediaItem(track: AudioTrack, artworkData: ByteArray? = null): MediaItem = MediaItem.Builder()
@@ -399,8 +484,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val item = jsonArray.optJSONObject(index) ?: continue
                 val id = item.optString("id").trim()
                 val name = item.optString("name").trim()
-                val keyword = item.optString("keyword").trim()
-                if (id.isNotBlank() && name.isNotBlank() && keyword.isNotBlank()) {
+                val keyword = item.optString("keyword").trim().takeIf { it.isNotBlank() }
+                if (id.isNotBlank() && name.isNotBlank()) {
                     add(
                         ClassificationFolder(
                             id = id,
@@ -438,6 +523,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         if (classificationFolders.isEmpty()) return
 
         val updatedFolders = classificationFolders.map { folder ->
+            val keyword = folder.keyword ?: return@map folder
             val tracksToCheck = if (folder.isInitialized) {
                 loadedTracks.filter { it.id !in folder.examinedTrackIds }
             } else {
@@ -448,7 +534,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             folder.copy(
                 trackIds = folder.trackIds + tracksToCheck
-                    .filter { it.matchesClassificationKeyword(folder.keyword) }
+                    .filter { it.matchesClassificationKeyword(keyword) }
                     .map { it.id },
                 examinedTrackIds = folder.examinedTrackIds + tracksToCheck.map { it.id },
                 isInitialized = true,
@@ -463,6 +549,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun AudioTrack.matchesClassificationKeyword(keyword: String): Boolean =
         fileExtension() in autoClassificationExtensions && title.contains(keyword, ignoreCase = true)
 
+    private fun PlaybackRepeatMode.toMedia3RepeatMode(): Int = when (this) {
+        PlaybackRepeatMode.PLAYLIST_ONCE -> Player.REPEAT_MODE_OFF
+        PlaybackRepeatMode.PLAYLIST_REPEAT -> Player.REPEAT_MODE_ALL
+        PlaybackRepeatMode.TRACK_REPEAT -> Player.REPEAT_MODE_ONE
+    }
+
+    private fun Int.toPlaybackRepeatMode(): PlaybackRepeatMode = when (this) {
+        Player.REPEAT_MODE_ALL -> PlaybackRepeatMode.PLAYLIST_REPEAT
+        Player.REPEAT_MODE_ONE -> PlaybackRepeatMode.TRACK_REPEAT
+        else -> PlaybackRepeatMode.PLAYLIST_ONCE
+    }
+
     private fun AudioTrack.fileExtension(): String = title.substringAfterLast('.', "").uppercase()
 
     private fun JSONObject.optLongSet(key: String): Set<Long> {
@@ -476,8 +574,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     companion object {
         const val DEFAULT_SKIP_SECONDS = 10
+        const val DEFAULT_PLAYBACK_SPEED = 1f
         private const val LOCK_SCREEN_ARTWORK_SIZE = 512
+        private const val MIN_PLAYBACK_SPEED = 0.5f
+        private const val MAX_PLAYBACK_SPEED = 2f
+        private const val PLAYBACK_SPEED_EPSILON = 0.001f
         val SKIP_INTERVALS = setOf(3, 5, 10, 15, 30)
+        val PLAYBACK_SPEEDS = (5..20).map { it / 10f }
         val SUPPORTED_AUTO_CLASSIFICATION_EXTENSIONS = listOf(
             "MP3", "M4A", "WAV", "FLAC", "AAC", "OGG", "OPUS", "WMA",
         )
@@ -485,11 +588,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
         private const val PREFERENCES_NAME = "audioseeker_preferences"
         private const val KEY_SKIP_SECONDS = "skip_seconds"
+        private const val KEY_PLAYBACK_SPEED = "playback_speed"
+        private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
+        private const val KEY_REPEAT_MODE = "repeat_mode"
+        private const val KEY_LAST_PLAYED_TRACK_ID = "last_played_track_id"
         private const val KEY_CONTROLS_LOCKED = "controls_locked"
         private const val KEY_UNLOCK_METHOD = "unlock_method"
         private const val KEY_THEME_PREFERENCE = "theme_preference"
         private const val KEY_SHOW_LOCK_SCREEN_ARTWORK = "show_lock_screen_artwork"
         private const val KEY_CLASSIFICATION_FOLDERS = "classification_folders"
         private const val KEY_AUTO_CLASSIFICATION_EXTENSIONS = "auto_classification_extensions"
+        private const val NO_TRACK_ID = -1L
     }
 }

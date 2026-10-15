@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_play_short_label">재생</string>
+    <string name="shortcut_play_long_label">마지막 재생 음악 재생</string>
+</resources>
