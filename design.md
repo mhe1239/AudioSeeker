@@ -68,6 +68,7 @@ AudioSeeker는 기기에 저장된 음악을 빠르게 찾고 정확한 위치�
 | 곡 목록 | `surface` 위에 곡명은 `onBackground`, 아티스트·길이는 `onSurfaceVariant` |
 | 현재 재생 곡 | `primaryContainer` 배경, 곡명은 `onPrimaryContainer`, 재생 상태 아이콘을 함께 표시 |
 | 재생/일시정지 버튼 | `primary` 채움, 아이콘은 `onPrimary`; 최소 터치 영역 48dp |
+| 셔플·반복 버튼 | 텍스트 없이 아이콘으로만 표시한다. 하단 플레이어 제목 행에서 곡 제목 뒤, 잠금 아이콘 앞에 `셔플 → 반복 → 잠금` 순서로 48dp 버튼을 배치하며, 접근성 라벨과 길게 누른 도움말로 현재 상태를 알린다. |
 | 탐색 바 | 진행 구간은 `primary`, 손잡이 또는 현재 위치는 `accent`, 남은 구간은 `surfaceVariant` |
 | 하단 플레이어 | `surface`와 미세한 `outline`으로 목록에서 분리 |
 | 삭제 버튼 | 목록의 휴지통 아이콘은 `onSurfaceVariant`로 표시한다. 삭제 확인 화면의 확정 동작과 재생 오류 등 실제 위험 상태에서만 `error`를 사용하며, 색상만으로 삭제를 표현하지 않고 휴지통 아이콘과 확인 절차를 제공한다. |

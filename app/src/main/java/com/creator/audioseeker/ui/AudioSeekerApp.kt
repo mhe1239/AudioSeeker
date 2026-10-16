@@ -771,12 +771,12 @@ private fun PlayerPanel(
                     Text(track?.title ?: "재생할 파일을 선택하세요", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
                     if (!compact) Text(track?.artist ?: "목록에서 파일을 누르면 재생됩니다", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+                PlaybackModeButtons(playerState, onToggleShuffle, onCycleRepeatMode)
                 LockControl(playerState.controlsLocked, playerState.unlockMethod, onToggleLock)
             }
             if (playerState.controlsLocked) LockHint(playerState.unlockMethod)
             PlaybackProgress(track != null, playerState, onSeekTo)
             PlaybackControls(track != null, playerState, onTogglePlayback, onSeekBy, onSkipPrevious, onSkipNext)
-            if (!compact) PlaybackModeControls(playerState, onToggleShuffle, onCycleRepeatMode)
         }
     }
 }
@@ -874,9 +874,20 @@ private fun PlaybackModeControls(
 ) {
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        PlaybackModeButtons(playerState, onToggleShuffle, onCycleRepeatMode)
+    }
+}
+
+@Composable
+private fun PlaybackModeButtons(
+    playerState: PlayerUiState,
+    onToggleShuffle: () -> Unit,
+    onCycleRepeatMode: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         PlaybackModeButton(
             icon = Icons.Default.Shuffle,
             label = if (playerState.shuffleEnabled) "셔플 켜짐" else "셔플 꺼짐",
@@ -902,21 +913,13 @@ private fun PlaybackModeButton(
     enabled: Boolean,
     onClick: () -> Unit,
 ) {
-    HelpIconButton(label, onClick, Modifier.heightIn(min = 48.dp), enabled) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                icon,
-                null,
-                Modifier.size(24.dp),
-                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelLarge,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-            )
-        }
+    HelpIconButton(label, onClick, Modifier.size(48.dp), enabled) {
+        Icon(
+            icon,
+            null,
+            Modifier.size(24.dp),
+            if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+        )
     }
 }
 
