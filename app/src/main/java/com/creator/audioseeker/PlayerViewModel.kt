@@ -147,7 +147,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val index = queue.indexOfFirst { it.id == track.id }
         if (index < 0) return
 
-        persistCurrentPosition()
         val items = queue.map(::createMediaItem)
         mediaController.shuffleModeEnabled = playerState.shuffleEnabled
         mediaController.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
@@ -173,9 +172,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     fun seekTo(positionMs: Long) {
         if (!playerState.controlsLocked) {
             val targetPositionMs = positionMs.coerceAtLeast(0L)
-            if (targetPositionMs == 0L) {
-                controller?.currentMediaItem?.mediaId?.toLongOrNull()?.let(::clearSavedPlaybackPosition)
-            }
             controller?.seekTo(targetPositionMs)
         }
     }
@@ -292,16 +288,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateProgress() = syncPlayerState()
 
-    fun persistCurrentPosition() {
-        val mediaController = controller ?: return
-        persistPlaybackPosition(
-            trackId = mediaController.currentMediaItem?.mediaId?.toLongOrNull(),
-            positionMs = mediaController.currentPosition,
-            durationMs = mediaController.duration,
-            force = true,
-        )
-    }
-
     fun createDeleteRequest(tracks: List<AudioTrack>): IntentSender {
         require(tracks.isNotEmpty())
         pendingDeletion = tracks.first().uri
@@ -332,7 +318,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 currentTrackId == playerState.currentTrackId &&
                 playerState.currentPositionMs > 0L
         val position = if (shouldKeepSavedPosition) playerState.currentPositionMs else reportedPosition
-        persistPlaybackPosition(currentTrackId, position, duration)
         playerState = playerState.copy(
             isConnected = true,
             isPlaying = mediaController.isPlaying,
@@ -452,7 +437,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
-        persistCurrentPosition()
         app.contentResolver.unregisterContentObserver(libraryObserver)
         controller?.removeListener(playerListener)
         controller?.release()
@@ -580,30 +564,6 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun savedPlaybackPositionMs(trackId: Long): Long =
         preferences.getLong(KEY_PLAYBACK_POSITION_PREFIX + trackId, 0L).coerceAtLeast(0L)
 
-    private fun persistPlaybackPosition(
-        trackId: Long?,
-        positionMs: Long,
-        durationMs: Long,
-        force: Boolean = false,
-    ) {
-        val id = trackId ?: return
-        val position = positionMs.coerceAtLeast(0L)
-        if (durationMs != C.TIME_UNSET && durationMs > 0L && position >= durationMs - RESUME_END_THRESHOLD_MS) {
-            clearSavedPlaybackPosition(id)
-            return
-        }
-        if (position == 0L && !force) return
-
-        val savedPosition = savedPlaybackPositionMs(id)
-        if (!force && kotlin.math.abs(position - savedPosition) < POSITION_SAVE_INTERVAL_MS) return
-
-        preferences.edit().putLong(KEY_PLAYBACK_POSITION_PREFIX + id, position).apply()
-    }
-
-    private fun clearSavedPlaybackPosition(trackId: Long) {
-        preferences.edit().remove(KEY_PLAYBACK_POSITION_PREFIX + trackId).apply()
-    }
-
     private fun PlaybackRepeatMode.toMedia3RepeatMode(): Int = when (this) {
         PlaybackRepeatMode.PLAYLIST_ONCE -> Player.REPEAT_MODE_OFF
         PlaybackRepeatMode.PLAYLIST_REPEAT -> Player.REPEAT_MODE_ALL
@@ -655,7 +615,5 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val KEY_CLASSIFICATION_FOLDERS = "classification_folders"
         private const val KEY_AUTO_CLASSIFICATION_EXTENSIONS = "auto_classification_extensions"
         private const val NO_TRACK_ID = -1L
-        private const val POSITION_SAVE_INTERVAL_MS = 5_000L
-        private const val RESUME_END_THRESHOLD_MS = 1_000L
     }
 }
