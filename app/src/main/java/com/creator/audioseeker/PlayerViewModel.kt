@@ -8,6 +8,7 @@ import android.content.ComponentName
 import android.content.ContentResolver
 import android.content.Context
 import android.content.IntentSender
+import android.content.SharedPreferences
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
@@ -92,9 +93,29 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     )
         private set
 
+    var sleepTimerOption: SleepTimerOption by mutableStateOf(readSleepTimerOption())
+        private set
+
+    var sleepTimerEndTimeMs: Long by mutableStateOf(
+        preferences.getLong(KEY_SLEEP_TIMER_END_TIME_MS, 0L).coerceAtLeast(0L),
+    )
+        private set
+
+    var customSleepTimerMinutes: Int by mutableStateOf(
+        preferences.getInt(KEY_SLEEP_TIMER_CUSTOM_MINUTES, DEFAULT_CUSTOM_SLEEP_TIMER_MINUTES)
+            .coerceIn(MIN_CUSTOM_SLEEP_TIMER_MINUTES, MAX_CUSTOM_SLEEP_TIMER_MINUTES),
+    )
+        private set
+
     private val appArtworkData: ByteArray? by lazy { createAppArtworkData() }
     private val embeddedArtworkCache = mutableMapOf<Long, ByteArray>()
     private val artworkCheckedTrackIds = mutableSetOf<Long>()
+
+    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key in SLEEP_TIMER_PREFERENCE_KEYS) {
+            Handler(Looper.getMainLooper()).post(::syncSleepTimerPreferences)
+        }
+    }
 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
@@ -109,6 +130,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     init {
+        preferences.registerOnSharedPreferenceChangeListener(preferenceListener)
         controllerFuture.addListener(
             {
                 controller = runCatching { controllerFuture.get() }.getOrNull()?.also {
@@ -205,6 +227,29 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         preferences.edit().putFloat(KEY_PLAYBACK_SPEED, selectedSpeed).apply()
         controller?.playbackParameters = PlaybackParameters(selectedSpeed)
         playerState = playerState.copy(playbackSpeed = selectedSpeed)
+    }
+
+    fun setSleepTimer(option: SleepTimerOption, customMinutes: Int = customSleepTimerMinutes) {
+        val minutes = customMinutes.coerceIn(MIN_CUSTOM_SLEEP_TIMER_MINUTES, MAX_CUSTOM_SLEEP_TIMER_MINUTES)
+        val currentTrackId = controller?.currentMediaItem?.mediaId?.toLongOrNull()
+        val resolvedOption = if (option == SleepTimerOption.CURRENT_TRACK_END && currentTrackId == null) {
+            SleepTimerOption.OFF
+        } else {
+            option
+        }
+        val endTimeMs = when (resolvedOption) {
+            SleepTimerOption.FIFTEEN_MINUTES -> System.currentTimeMillis() + FIFTEEN_MINUTES_MS
+            SleepTimerOption.THIRTY_MINUTES -> System.currentTimeMillis() + THIRTY_MINUTES_MS
+            SleepTimerOption.CUSTOM -> System.currentTimeMillis() + minutes * 60_000L
+            SleepTimerOption.OFF, SleepTimerOption.CURRENT_TRACK_END -> 0L
+        }
+        preferences.edit()
+            .putString(KEY_SLEEP_TIMER_OPTION, resolvedOption.name)
+            .putLong(KEY_SLEEP_TIMER_END_TIME_MS, endTimeMs)
+            .putLong(KEY_SLEEP_TIMER_TRACK_ID, currentTrackId ?: NO_TRACK_ID)
+            .putInt(KEY_SLEEP_TIMER_CUSTOM_MINUTES, minutes)
+            .apply()
+        syncSleepTimerPreferences()
     }
 
     fun toggleShuffle() {
@@ -437,6 +482,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         app.contentResolver.unregisterContentObserver(libraryObserver)
         controller?.removeListener(playerListener)
         controller?.release()
@@ -564,6 +610,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun savedPlaybackPositionMs(trackId: Long): Long =
         preferences.getLong(KEY_PLAYBACK_POSITION_PREFIX + trackId, 0L).coerceAtLeast(0L)
 
+    private fun readSleepTimerOption(): SleepTimerOption =
+        preferences.getString(KEY_SLEEP_TIMER_OPTION, null)
+            ?.let { value -> SleepTimerOption.entries.firstOrNull { it.name == value } }
+            ?: SleepTimerOption.OFF
+
+    private fun syncSleepTimerPreferences() {
+        sleepTimerOption = readSleepTimerOption()
+        sleepTimerEndTimeMs = preferences.getLong(KEY_SLEEP_TIMER_END_TIME_MS, 0L).coerceAtLeast(0L)
+        customSleepTimerMinutes = preferences
+            .getInt(KEY_SLEEP_TIMER_CUSTOM_MINUTES, DEFAULT_CUSTOM_SLEEP_TIMER_MINUTES)
+            .coerceIn(MIN_CUSTOM_SLEEP_TIMER_MINUTES, MAX_CUSTOM_SLEEP_TIMER_MINUTES)
+    }
+
     private fun PlaybackRepeatMode.toMedia3RepeatMode(): Int = when (this) {
         PlaybackRepeatMode.PLAYLIST_ONCE -> Player.REPEAT_MODE_OFF
         PlaybackRepeatMode.PLAYLIST_REPEAT -> Player.REPEAT_MODE_ALL
@@ -612,8 +671,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val KEY_UNLOCK_METHOD = "unlock_method"
         private const val KEY_THEME_PREFERENCE = "theme_preference"
         private const val KEY_SHOW_LOCK_SCREEN_ARTWORK = "show_lock_screen_artwork"
+        private const val KEY_SLEEP_TIMER_OPTION = "sleep_timer_option"
+        private const val KEY_SLEEP_TIMER_END_TIME_MS = "sleep_timer_end_time_ms"
+        private const val KEY_SLEEP_TIMER_TRACK_ID = "sleep_timer_track_id"
+        private const val KEY_SLEEP_TIMER_CUSTOM_MINUTES = "sleep_timer_custom_minutes"
         private const val KEY_CLASSIFICATION_FOLDERS = "classification_folders"
         private const val KEY_AUTO_CLASSIFICATION_EXTENSIONS = "auto_classification_extensions"
         private const val NO_TRACK_ID = -1L
+        private const val FIFTEEN_MINUTES_MS = 15 * 60_000L
+        private const val THIRTY_MINUTES_MS = 30 * 60_000L
+        private const val DEFAULT_CUSTOM_SLEEP_TIMER_MINUTES = 45
+        private const val MIN_CUSTOM_SLEEP_TIMER_MINUTES = 1
+        private const val MAX_CUSTOM_SLEEP_TIMER_MINUTES = 720
+        private val SLEEP_TIMER_PREFERENCE_KEYS = setOf(
+            KEY_SLEEP_TIMER_OPTION,
+            KEY_SLEEP_TIMER_END_TIME_MS,
+            KEY_SLEEP_TIMER_TRACK_ID,
+            KEY_SLEEP_TIMER_CUSTOM_MINUTES,
+        )
     }
 }

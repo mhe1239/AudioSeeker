@@ -100,6 +100,7 @@ import com.creator.audioseeker.PlayerUiState
 import com.creator.audioseeker.PlayerViewModel
 import com.creator.audioseeker.PlaybackRepeatMode
 import com.creator.audioseeker.R
+import com.creator.audioseeker.SleepTimerOption
 import com.creator.audioseeker.ThemePreference
 import com.creator.audioseeker.UnlockMethod
 import kotlinx.coroutines.delay
@@ -123,6 +124,10 @@ fun AudioSeekerApp(
     onSkipNext: () -> Unit,
     onSetSkipSeconds: (Int) -> Unit,
     onSetPlaybackSpeed: (Float) -> Unit,
+    sleepTimerOption: SleepTimerOption,
+    sleepTimerEndTimeMs: Long,
+    customSleepTimerMinutes: Int,
+    onSetSleepTimer: (SleepTimerOption, Int) -> Unit,
     onToggleShuffle: () -> Unit,
     onCycleRepeatMode: () -> Unit,
     onSetControlsLocked: (Boolean) -> Unit,
@@ -188,6 +193,10 @@ fun AudioSeekerApp(
                     onSetSkipSeconds = onSetSkipSeconds,
                     selectedPlaybackSpeed = playerState.playbackSpeed,
                     onSetPlaybackSpeed = onSetPlaybackSpeed,
+                    sleepTimerOption = sleepTimerOption,
+                    sleepTimerEndTimeMs = sleepTimerEndTimeMs,
+                    customSleepTimerMinutes = customSleepTimerMinutes,
+                    onSetSleepTimer = onSetSleepTimer,
                     selectedUnlockMethod = playerState.unlockMethod,
                     onSetUnlockMethod = onSetUnlockMethod,
                     selectedAutoClassificationExtensions = autoClassificationExtensions,
@@ -1041,6 +1050,10 @@ private fun SettingsScreen(
     onSetSkipSeconds: (Int) -> Unit,
     selectedPlaybackSpeed: Float,
     onSetPlaybackSpeed: (Float) -> Unit,
+    sleepTimerOption: SleepTimerOption,
+    sleepTimerEndTimeMs: Long,
+    customSleepTimerMinutes: Int,
+    onSetSleepTimer: (SleepTimerOption, Int) -> Unit,
     selectedUnlockMethod: UnlockMethod,
     onSetUnlockMethod: (UnlockMethod) -> Unit,
     selectedThemePreference: ThemePreference,
@@ -1061,6 +1074,9 @@ private fun SettingsScreen(
     onToggleLock: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
+    var customTimerMinutesInput by remember(customSleepTimerMinutes) {
+        mutableStateOf(customSleepTimerMinutes.toString())
+    }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val isCompactHeight = maxHeight < 420.dp
         Column(Modifier.fillMaxSize().statusBarsPadding()) {
@@ -1134,6 +1150,51 @@ private fun SettingsScreen(
                     Text("0.5배", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.weight(1f))
                     Text("2.0배", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("자동 끄기 타이머", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    sleepTimerSummary(sleepTimerOption, sleepTimerEndTimeMs, currentTrack),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SleepTimerOption.entries.forEach { option ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable {
+                            onSetSleepTimer(option, customTimerMinutesInput.toIntOrNull() ?: customSleepTimerMinutes)
+                        }.padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        RadioButton(
+                            selected = sleepTimerOption == option,
+                            onClick = {
+                                onSetSleepTimer(option, customTimerMinutesInput.toIntOrNull() ?: customSleepTimerMinutes)
+                            },
+                        )
+                        Text(option.sleepTimerLabel(), Modifier.padding(start = 8.dp))
+                    }
+                }
+                if (sleepTimerOption == SleepTimerOption.CUSTOM) {
+                    OutlinedTextField(
+                        value = customTimerMinutesInput,
+                        onValueChange = { value ->
+                            customTimerMinutesInput = value.filter(Char::isDigit).take(3)
+                        },
+                        label = { Text("분 (1~720)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Button(
+                        onClick = {
+                            onSetSleepTimer(
+                                SleepTimerOption.CUSTOM,
+                                customTimerMinutesInput.toIntOrNull() ?: customSleepTimerMinutes,
+                            )
+                        },
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) {
+                        Text("사용자 지정 타이머 시작")
+                    }
                 }
                 Spacer(Modifier.height(16.dp))
                 Text("삼성 루틴 재생", style = MaterialTheme.typography.titleSmall)
@@ -1276,6 +1337,31 @@ private fun ThemePreference.settingsLabel(): String = when (this) {
     ThemePreference.DARK -> "청록 다크 모드"
     ThemePreference.STANDARD_DARK -> "표준 다크 모드"
     ThemePreference.LIGHT -> "라이트 모드"
+}
+
+private fun SleepTimerOption.sleepTimerLabel(): String = when (this) {
+    SleepTimerOption.OFF -> "사용 안 함"
+    SleepTimerOption.FIFTEEN_MINUTES -> "15분 후 끄기"
+    SleepTimerOption.THIRTY_MINUTES -> "30분 후 끄기"
+    SleepTimerOption.CURRENT_TRACK_END -> "현재 곡이 끝나면 끄기"
+    SleepTimerOption.CUSTOM -> "사용자 지정"
+}
+
+private fun sleepTimerSummary(
+    option: SleepTimerOption,
+    endTimeMs: Long,
+    currentTrack: AudioTrack?,
+): String = when (option) {
+    SleepTimerOption.OFF -> "재생을 자동으로 멈추지 않습니다."
+    SleepTimerOption.CURRENT_TRACK_END -> currentTrack?.let { "${it.title} 재생이 끝나면 멈춥니다." }
+        ?: "재생 중인 곡이 없어서 타이머를 시작할 수 없습니다."
+    SleepTimerOption.FIFTEEN_MINUTES,
+    SleepTimerOption.THIRTY_MINUTES,
+    SleepTimerOption.CUSTOM,
+    -> {
+        val remainingMinutes = ((endTimeMs - System.currentTimeMillis()).coerceAtLeast(0L) + 59_999L) / 60_000L
+        "약 ${remainingMinutes}분 후 재생을 멈춥니다."
+    }
 }
 
 private fun PlaybackRepeatMode.repeatLabel(): String = when (this) {

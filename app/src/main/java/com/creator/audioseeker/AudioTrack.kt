@@ -20,6 +20,14 @@ enum class PlaybackRepeatMode {
     TRACK_REPEAT,
 }
 
+enum class SleepTimerOption {
+    OFF,
+    FIFTEEN_MINUTES,
+    THIRTY_MINUTES,
+    CURRENT_TRACK_END,
+    CUSTOM,
+}
+
 data class ClassificationFolder(
     val id: String,
     val name: String,

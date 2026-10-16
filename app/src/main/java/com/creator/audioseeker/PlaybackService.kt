@@ -1,6 +1,7 @@
 package com.creator.audioseeker
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.AudioAttributes
@@ -28,6 +29,10 @@ class PlaybackService : MediaSessionService() {
             }
         }
     }
+    private val sleepTimerRunnable = Runnable { finishSleepTimer() }
+    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key in SLEEP_TIMER_PREFERENCE_KEYS) handler.post(::scheduleSleepTimer)
+    }
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -37,6 +42,9 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             player?.let(::persistPlaybackPosition)
+            if (playbackState == Player.STATE_ENDED && isCurrentTrackEndTimer(player?.currentMediaItem)) {
+                handler.post(::finishSleepTimer)
+            }
         }
 
         override fun onPositionDiscontinuity(
@@ -44,6 +52,9 @@ class PlaybackService : MediaSessionService() {
             newPosition: Player.PositionInfo,
             reason: Int,
         ) {
+            if (reason == Player.DISCONTINUITY_REASON_AUTO_TRANSITION && isCurrentTrackEndTimer(oldPosition.mediaItem)) {
+                handler.post(::finishSleepTimer)
+            }
             persistPlaybackPosition(oldPosition.mediaItem, oldPosition.positionMs, C.TIME_UNSET)
             if (reason == Player.DISCONTINUITY_REASON_SEEK || reason == Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT) {
                 player?.let(::persistPlaybackPosition)
@@ -74,6 +85,8 @@ class PlaybackService : MediaSessionService() {
 
         player?.addListener(playerListener)
         mediaSession = MediaSession.Builder(this, requireNotNull(player)).build()
+        preferences.registerOnSharedPreferenceChangeListener(preferenceListener)
+        scheduleSleepTimer()
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
@@ -85,6 +98,8 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         stopPeriodicPositionSaving()
+        handler.removeCallbacks(sleepTimerRunnable)
+        preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         mediaSession?.run {
             player.removeListener(playerListener)
             persistPlaybackPosition(player)
@@ -104,6 +119,42 @@ class PlaybackService : MediaSessionService() {
     private fun stopPeriodicPositionSaving() {
         handler.removeCallbacks(positionSaver)
     }
+
+    private fun scheduleSleepTimer() {
+        handler.removeCallbacks(sleepTimerRunnable)
+        when (readSleepTimerOption()) {
+            SleepTimerOption.FIFTEEN_MINUTES,
+            SleepTimerOption.THIRTY_MINUTES,
+            SleepTimerOption.CUSTOM,
+            -> {
+                val remainingMs = preferences.getLong(KEY_SLEEP_TIMER_END_TIME_MS, 0L) - System.currentTimeMillis()
+                if (remainingMs <= 0L) finishSleepTimer() else handler.postDelayed(sleepTimerRunnable, remainingMs)
+            }
+
+            SleepTimerOption.OFF,
+            SleepTimerOption.CURRENT_TRACK_END,
+            -> Unit
+        }
+    }
+
+    private fun isCurrentTrackEndTimer(mediaItem: MediaItem?): Boolean =
+        readSleepTimerOption() == SleepTimerOption.CURRENT_TRACK_END &&
+            mediaItem?.mediaId?.toLongOrNull() == preferences.getLong(KEY_SLEEP_TIMER_TRACK_ID, NO_TRACK_ID)
+
+    private fun finishSleepTimer() {
+        handler.removeCallbacks(sleepTimerRunnable)
+        player?.pause()
+        preferences.edit()
+            .putString(KEY_SLEEP_TIMER_OPTION, SleepTimerOption.OFF.name)
+            .putLong(KEY_SLEEP_TIMER_END_TIME_MS, 0L)
+            .putLong(KEY_SLEEP_TIMER_TRACK_ID, NO_TRACK_ID)
+            .apply()
+    }
+
+    private fun readSleepTimerOption(): SleepTimerOption =
+        preferences.getString(KEY_SLEEP_TIMER_OPTION, null)
+            ?.let { value -> SleepTimerOption.entries.firstOrNull { it.name == value } }
+            ?: SleepTimerOption.OFF
 
     private fun persistPlaybackPosition(player: Player) {
         persistPlaybackPosition(player.currentMediaItem, player.currentPosition, player.duration)
@@ -128,5 +179,14 @@ class PlaybackService : MediaSessionService() {
         const val PREFERENCES_NAME = "audioseeker_preferences"
         const val KEY_LAST_PLAYED_TRACK_ID = "last_played_track_id"
         const val KEY_PLAYBACK_POSITION_PREFIX = "playback_position_"
+        const val KEY_SLEEP_TIMER_OPTION = "sleep_timer_option"
+        const val KEY_SLEEP_TIMER_END_TIME_MS = "sleep_timer_end_time_ms"
+        const val KEY_SLEEP_TIMER_TRACK_ID = "sleep_timer_track_id"
+        const val NO_TRACK_ID = -1L
+        val SLEEP_TIMER_PREFERENCE_KEYS = setOf(
+            KEY_SLEEP_TIMER_OPTION,
+            KEY_SLEEP_TIMER_END_TIME_MS,
+            KEY_SLEEP_TIMER_TRACK_ID,
+        )
     }
 }
