@@ -49,10 +49,10 @@ private val TealDarkColors = darkColorScheme(
 )
 
 private val StandardDarkColors = darkColorScheme(
-    primary = Color(0xFF80CBC4),
-    onPrimary = Color(0xFF003731),
-    primaryContainer = Color(0xFF005047),
-    onPrimaryContainer = Color(0xFFA7F3D0),
+    primary = Color(0xFFB8C4FF),
+    onPrimary = Color(0xFF172033),
+    primaryContainer = Color(0xFF2A3452),
+    onPrimaryContainer = Color(0xFFE0E7FF),
     secondary = Color(0xFFF6C35B),
     onSecondary = Color(0xFF3A2A00),
     background = Color(0xFF121212),
@@ -62,8 +62,8 @@ private val StandardDarkColors = darkColorScheme(
     surfaceVariant = Color(0xFF2A2A2A),
     onSurfaceVariant = Color(0xFFCAC4D0),
     outline = Color(0xFF938F99),
-    error = Color(0xFFFFB4AB),
-    onError = Color(0xFF690005),
+    error = Color(0xFFE7AAA5),
+    onError = Color(0xFF3A0807),
 )
 
 @Composable

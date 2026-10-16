@@ -616,7 +616,7 @@ private fun ClassificationFolderList(
                     { onRemoveFolder(folder) },
                     Modifier.size(48.dp),
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+                    Icon(Icons.Default.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
@@ -742,7 +742,7 @@ private fun TrackRow(
                 else Text(track.folderName(), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             HelpIconButton("${track.title} 삭제", onDelete, Modifier.size(48.dp)) {
-                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
