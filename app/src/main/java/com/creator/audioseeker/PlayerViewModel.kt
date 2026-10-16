@@ -46,6 +46,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var pendingDeletion: Uri? = null
     private var shortcutPlaybackRequested = false
     private var shortcutTrackLoadInProgress = false
+    private val savedCurrentTrackId = preferences.getLong(KEY_LAST_PLAYED_TRACK_ID, NO_TRACK_ID)
+        .takeIf { it != NO_TRACK_ID }
 
     var tracks: List<AudioTrack> by mutableStateOf(emptyList())
         private set
@@ -62,6 +64,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private set
 
     var playerState by mutableStateOf(PlayerUiState(
+        currentTrackId = savedCurrentTrackId,
+        currentPositionMs = savedCurrentTrackId?.let(::savedPlaybackPositionMs) ?: 0L,
         skipSeconds = preferences.getInt(KEY_SKIP_SECONDS, DEFAULT_SKIP_SECONDS),
         playbackSpeed = preferences.getFloat(KEY_PLAYBACK_SPEED, DEFAULT_PLAYBACK_SPEED)
             .coerceIn(MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED),
@@ -143,10 +147,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val index = queue.indexOfFirst { it.id == track.id }
         if (index < 0) return
 
+        persistCurrentPosition()
         val items = queue.map(::createMediaItem)
         mediaController.shuffleModeEnabled = playerState.shuffleEnabled
         mediaController.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
-        mediaController.setMediaItems(items, index, 0L)
+        mediaController.setMediaItems(items, index, savedPlaybackPositionMs(track.id))
         mediaController.prepare()
         mediaController.play()
         preferences.edit().putLong(KEY_LAST_PLAYED_TRACK_ID, track.id).apply()
@@ -167,7 +172,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun seekTo(positionMs: Long) {
         if (!playerState.controlsLocked) {
-            controller?.seekTo(positionMs.coerceAtLeast(0L))
+            val targetPositionMs = positionMs.coerceAtLeast(0L)
+            if (targetPositionMs == 0L) {
+                controller?.currentMediaItem?.mediaId?.toLongOrNull()?.let(::clearSavedPlaybackPosition)
+            }
+            controller?.seekTo(targetPositionMs)
         }
     }
 
@@ -283,6 +292,16 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun updateProgress() = syncPlayerState()
 
+    fun persistCurrentPosition() {
+        val mediaController = controller ?: return
+        persistPlaybackPosition(
+            trackId = mediaController.currentMediaItem?.mediaId?.toLongOrNull(),
+            positionMs = mediaController.currentPosition,
+            durationMs = mediaController.duration,
+            force = true,
+        )
+    }
+
     fun createDeleteRequest(tracks: List<AudioTrack>): IntentSender {
         require(tracks.isNotEmpty())
         pendingDeletion = tracks.first().uri
@@ -306,11 +325,19 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             if (showLockScreenArtwork) tracks.firstOrNull { it.id == id }?.let(::requestEmbeddedArtwork)
         }
         val duration = mediaController.duration.let { if (it == C.TIME_UNSET) 0L else it.coerceAtLeast(0L) }
+        val reportedPosition = mediaController.currentPosition.coerceAtLeast(0L)
+        val shouldKeepSavedPosition =
+            mediaController.playbackState != Player.STATE_READY &&
+                currentTrackId != null &&
+                currentTrackId == playerState.currentTrackId &&
+                playerState.currentPositionMs > 0L
+        val position = if (shouldKeepSavedPosition) playerState.currentPositionMs else reportedPosition
+        persistPlaybackPosition(currentTrackId, position, duration)
         playerState = playerState.copy(
             isConnected = true,
             isPlaying = mediaController.isPlaying,
             currentTrackId = currentTrackId,
-            currentPositionMs = mediaController.currentPosition.coerceAtLeast(0L),
+            currentPositionMs = position,
             durationMs = duration,
             playbackSpeed = mediaController.playbackParameters.speed,
             shuffleEnabled = mediaController.shuffleModeEnabled,
@@ -425,6 +452,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     override fun onCleared() {
+        persistCurrentPosition()
         app.contentResolver.unregisterContentObserver(libraryObserver)
         controller?.removeListener(playerListener)
         controller?.release()
@@ -549,6 +577,33 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun AudioTrack.matchesClassificationKeyword(keyword: String): Boolean =
         fileExtension() in autoClassificationExtensions && title.contains(keyword, ignoreCase = true)
 
+    private fun savedPlaybackPositionMs(trackId: Long): Long =
+        preferences.getLong(KEY_PLAYBACK_POSITION_PREFIX + trackId, 0L).coerceAtLeast(0L)
+
+    private fun persistPlaybackPosition(
+        trackId: Long?,
+        positionMs: Long,
+        durationMs: Long,
+        force: Boolean = false,
+    ) {
+        val id = trackId ?: return
+        val position = positionMs.coerceAtLeast(0L)
+        if (durationMs != C.TIME_UNSET && durationMs > 0L && position >= durationMs - RESUME_END_THRESHOLD_MS) {
+            clearSavedPlaybackPosition(id)
+            return
+        }
+        if (position == 0L && !force) return
+
+        val savedPosition = savedPlaybackPositionMs(id)
+        if (!force && kotlin.math.abs(position - savedPosition) < POSITION_SAVE_INTERVAL_MS) return
+
+        preferences.edit().putLong(KEY_PLAYBACK_POSITION_PREFIX + id, position).apply()
+    }
+
+    private fun clearSavedPlaybackPosition(trackId: Long) {
+        preferences.edit().remove(KEY_PLAYBACK_POSITION_PREFIX + trackId).apply()
+    }
+
     private fun PlaybackRepeatMode.toMedia3RepeatMode(): Int = when (this) {
         PlaybackRepeatMode.PLAYLIST_ONCE -> Player.REPEAT_MODE_OFF
         PlaybackRepeatMode.PLAYLIST_REPEAT -> Player.REPEAT_MODE_ALL
@@ -589,6 +644,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val PREFERENCES_NAME = "audioseeker_preferences"
         private const val KEY_SKIP_SECONDS = "skip_seconds"
         private const val KEY_PLAYBACK_SPEED = "playback_speed"
+        private const val KEY_PLAYBACK_POSITION_PREFIX = "playback_position_"
         private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
         private const val KEY_REPEAT_MODE = "repeat_mode"
         private const val KEY_LAST_PLAYED_TRACK_ID = "last_played_track_id"
@@ -599,5 +655,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val KEY_CLASSIFICATION_FOLDERS = "classification_folders"
         private const val KEY_AUTO_CLASSIFICATION_EXTENSIONS = "auto_classification_extensions"
         private const val NO_TRACK_ID = -1L
+        private const val POSITION_SAVE_INTERVAL_MS = 5_000L
+        private const val RESUME_END_THRESHOLD_MS = 1_000L
     }
 }
