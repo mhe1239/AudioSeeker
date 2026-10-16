@@ -79,6 +79,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -719,6 +720,7 @@ private fun TrackRow(
     onPlay: () -> Unit,
     onDelete: () -> Unit,
 ) {
+    val selectionContentAlpha = if (selectionEnabled || isCurrent) 1f else 0.5f
     val background = if (isCurrent) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
     val titleColor = if (isCurrent) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
     Surface(color = background) {
@@ -726,9 +728,14 @@ private fun TrackRow(
             Modifier.fillMaxWidth().clickable(enabled = selectionEnabled, role = Role.Button, onClick = onPlay).padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Default.MusicNote, null, Modifier.size(32.dp), if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(
+                Icons.Default.MusicNote,
+                null,
+                Modifier.size(32.dp).alpha(selectionContentAlpha),
+                if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             Spacer(Modifier.size(12.dp))
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).alpha(selectionContentAlpha)) {
                 Text(track.title, maxLines = 1, overflow = TextOverflow.Ellipsis, color = titleColor, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal)
                 Text("${track.artist} · ${formatDuration(track.durationMs)}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (isCurrent) Text("현재 재생 중", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.Medium)
