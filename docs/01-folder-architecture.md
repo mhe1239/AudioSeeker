@@ -29,6 +29,7 @@ AudioSeeker/
     ├── 03-product-plan.md             # 제품 범위와 진행 계획
     ├── RECONSTRUCTION.md              # 이 브랜치의 복원·검증 이력
     ├── reports/                       # 완료 작업과 판단 기록
+    ├── README.ko.md                  # 한국어 프로젝트 소개
     └── todo/                          # 미완료 후속 작업
 ```
 
