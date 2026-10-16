@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.creator.audioseeker.ui.AudioSeekerApp
 import com.creator.audioseeker.ui.theme.AudioSeekerTheme
 
@@ -25,6 +26,7 @@ class MainActivity : ComponentActivity() {
     private var playerViewModel: PlayerViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         pendingShortcutAction = intent?.action
         setContent {

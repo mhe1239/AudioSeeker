@@ -14,7 +14,7 @@
         android:roundIcon="@drawable/audioseeker_brand_icon"
         android:label="AudioSeeker"
         android:resizeableActivity="true"
-        android:theme="@style/Theme.AudioSeeker">
+        android:theme="@style/Theme.AudioSeeker.Starting">
         <activity
             android:name=".MainActivity"
             android:exported="true">
