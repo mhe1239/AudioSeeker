@@ -68,6 +68,8 @@ class MainActivity : ComponentActivity() {
                     onSkipNext = playerViewModel::skipToNext,
                     onSetSkipSeconds = playerViewModel::setSkipSeconds,
                     onSetPlaybackSpeed = playerViewModel::setPlaybackSpeed,
+                    reduceBoundarySilence = playerViewModel.reduceBoundarySilence,
+                    onSetReduceBoundarySilence = playerViewModel::updateReduceBoundarySilence,
                     sleepTimerOption = playerViewModel.sleepTimerOption,
                     sleepTimerEndTimeMs = playerViewModel.sleepTimerEndTimeMs,
                     customSleepTimerMinutes = playerViewModel.customSleepTimerMinutes,

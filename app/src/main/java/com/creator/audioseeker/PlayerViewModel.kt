@@ -47,6 +47,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var pendingDeletion: Uri? = null
     private var shortcutPlaybackRequested = false
     private var shortcutTrackLoadInProgress = false
+    private var playbackRequestId = 0L
+    private var activeQueue: List<AudioTrack> = emptyList()
+    private val boundarySilenceClipCache = mutableMapOf<Long, BoundarySilenceClip>()
+    private val boundarySilenceAnalysisTrackIds = mutableSetOf<Long>()
+    private val boundarySilenceAnalyzer by lazy { BoundarySilenceAnalyzer(app) }
     private val savedCurrentTrackId = preferences.getLong(KEY_LAST_PLAYED_TRACK_ID, NO_TRACK_ID)
         .takeIf { it != NO_TRACK_ID }
 
@@ -61,6 +66,11 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             ?.map { it.uppercase() }
             ?.toSet()
             ?: DEFAULT_AUTO_CLASSIFICATION_EXTENSIONS,
+    )
+        private set
+
+    var reduceBoundarySilence: Boolean by mutableStateOf(
+        preferences.getBoolean(KEY_REDUCE_BOUNDARY_SILENCE, false),
     )
         private set
 
@@ -120,6 +130,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val playerListener = object : Player.Listener {
         override fun onEvents(player: Player, events: Player.Events) {
             syncPlayerState()
+            if (events.contains(Player.EVENT_MEDIA_ITEM_TRANSITION)) {
+                player.currentMediaItem?.mediaId?.toLongOrNull()?.let(::prefetchFollowingBoundarySilenceClip)
+            }
         }
     }
 
@@ -164,19 +177,23 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun playTrack(track: AudioTrack, playlist: List<AudioTrack>) {
         if (playerState.controlsLocked) return
-        val mediaController = controller ?: return
         val queue = playlist.distinctBy { it.id }
         val index = queue.indexOfFirst { it.id == track.id }
         if (index < 0) return
+        val requestId = ++playbackRequestId
+        if (!reduceBoundarySilence) {
+            startTrackPlayback(track, queue, index)
+            return
+        }
 
-        val items = queue.map(::createMediaItem)
-        mediaController.shuffleModeEnabled = playerState.shuffleEnabled
-        mediaController.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
-        mediaController.setMediaItems(items, index, savedPlaybackPositionMs(track.id))
-        mediaController.prepare()
-        mediaController.play()
-        preferences.edit().putLong(KEY_LAST_PLAYED_TRACK_ID, track.id).apply()
-        requestEmbeddedArtwork(track)
+        viewModelScope.launch(Dispatchers.IO) {
+            val clip = boundarySilenceClipCache[track.id] ?: boundarySilenceAnalyzer.analyze(track)
+            withContext(Dispatchers.Main) {
+                if (requestId != playbackRequestId || !reduceBoundarySilence) return@withContext
+                boundarySilenceClipCache[track.id] = clip
+                startTrackPlayback(track, queue, index)
+            }
+        }
     }
 
     fun playLastTrack() {
@@ -227,6 +244,18 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         preferences.edit().putFloat(KEY_PLAYBACK_SPEED, selectedSpeed).apply()
         controller?.playbackParameters = PlaybackParameters(selectedSpeed)
         playerState = playerState.copy(playbackSpeed = selectedSpeed)
+    }
+
+    fun updateReduceBoundarySilence(enabled: Boolean) {
+        preferences.edit().putBoolean(KEY_REDUCE_BOUNDARY_SILENCE, enabled).apply()
+        reduceBoundarySilence = enabled
+        playbackRequestId += 1L
+        if (!enabled) {
+            boundarySilenceClipCache.clear()
+            boundarySilenceAnalysisTrackIds.clear()
+        } else {
+            playerState.currentTrackId?.let(::prefetchFollowingBoundarySilenceClip)
+        }
     }
 
     fun setSleepTimer(option: SleepTimerOption, customMinutes: Int = customSleepTimerMinutes) {
@@ -400,9 +429,57 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         playTrack(track, tracks)
     }
 
+    private fun startTrackPlayback(track: AudioTrack, queue: List<AudioTrack>, index: Int) {
+        val mediaController = controller ?: return
+        activeQueue = queue
+        mediaController.shuffleModeEnabled = playerState.shuffleEnabled
+        mediaController.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
+        mediaController.setMediaItems(queue.map(::createMediaItem), index, savedPlaybackPositionMs(track.id))
+        mediaController.prepare()
+        mediaController.play()
+        preferences.edit().putLong(KEY_LAST_PLAYED_TRACK_ID, track.id).apply()
+        requestEmbeddedArtwork(track)
+        prefetchFollowingBoundarySilenceClip(track.id)
+    }
+
+    private fun prefetchFollowingBoundarySilenceClip(currentTrackId: Long) {
+        if (!reduceBoundarySilence) return
+        val currentIndex = activeQueue.indexOfFirst { it.id == currentTrackId }
+        val nextTrack = activeQueue.getOrNull(currentIndex + 1) ?: return
+        if (nextTrack.id in boundarySilenceClipCache || !boundarySilenceAnalysisTrackIds.add(nextTrack.id)) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val clip = boundarySilenceAnalyzer.analyze(nextTrack)
+            withContext(Dispatchers.Main) {
+                boundarySilenceAnalysisTrackIds.remove(nextTrack.id)
+                if (!reduceBoundarySilence) return@withContext
+                boundarySilenceClipCache[nextTrack.id] = clip
+                replaceQueuedMediaItem(nextTrack)
+            }
+        }
+    }
+
+    private fun replaceQueuedMediaItem(track: AudioTrack) {
+        val mediaController = controller ?: return
+        val itemIndex = (0 until mediaController.mediaItemCount).firstOrNull { index ->
+            mediaController.getMediaItemAt(index).mediaId == track.id.toString()
+        } ?: return
+        if (itemIndex != mediaController.currentMediaItemIndex) {
+            mediaController.replaceMediaItem(itemIndex, createMediaItem(track))
+        }
+    }
+
     private fun createMediaItem(track: AudioTrack, artworkData: ByteArray? = null): MediaItem = MediaItem.Builder()
         .setMediaId(track.id.toString())
         .setUri(track.uri)
+        .apply {
+            if (reduceBoundarySilence) {
+                boundarySilenceClipCache[track.id]?.takeIf(BoundarySilenceClip::isClipped)?.let { clip ->
+                    setClipStartPositionMs(clip.startPositionMs)
+                    clip.endPositionMs?.let(::setClipEndPositionMs)
+                }
+            }
+        }
         .setMediaMetadata(
             MediaMetadata.Builder()
                 .setTitle(track.title)
@@ -663,6 +740,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         private const val PREFERENCES_NAME = "audioseeker_preferences"
         private const val KEY_SKIP_SECONDS = "skip_seconds"
         private const val KEY_PLAYBACK_SPEED = "playback_speed"
+        private const val KEY_REDUCE_BOUNDARY_SILENCE = "reduce_boundary_silence"
         private const val KEY_PLAYBACK_POSITION_PREFIX = "playback_position_"
         private const val KEY_SHUFFLE_ENABLED = "shuffle_enabled"
         private const val KEY_REPEAT_MODE = "repeat_mode"

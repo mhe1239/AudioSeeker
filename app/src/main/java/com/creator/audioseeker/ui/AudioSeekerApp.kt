@@ -124,6 +124,8 @@ fun AudioSeekerApp(
     onSkipNext: () -> Unit,
     onSetSkipSeconds: (Int) -> Unit,
     onSetPlaybackSpeed: (Float) -> Unit,
+    reduceBoundarySilence: Boolean,
+    onSetReduceBoundarySilence: (Boolean) -> Unit,
     sleepTimerOption: SleepTimerOption,
     sleepTimerEndTimeMs: Long,
     customSleepTimerMinutes: Int,
@@ -193,6 +195,8 @@ fun AudioSeekerApp(
                     onSetSkipSeconds = onSetSkipSeconds,
                     selectedPlaybackSpeed = playerState.playbackSpeed,
                     onSetPlaybackSpeed = onSetPlaybackSpeed,
+                    reduceBoundarySilence = reduceBoundarySilence,
+                    onSetReduceBoundarySilence = onSetReduceBoundarySilence,
                     sleepTimerOption = sleepTimerOption,
                     sleepTimerEndTimeMs = sleepTimerEndTimeMs,
                     customSleepTimerMinutes = customSleepTimerMinutes,
@@ -1050,6 +1054,8 @@ private fun SettingsScreen(
     onSetSkipSeconds: (Int) -> Unit,
     selectedPlaybackSpeed: Float,
     onSetPlaybackSpeed: (Float) -> Unit,
+    reduceBoundarySilence: Boolean,
+    onSetReduceBoundarySilence: (Boolean) -> Unit,
     sleepTimerOption: SleepTimerOption,
     sleepTimerEndTimeMs: Long,
     customSleepTimerMinutes: Int,
@@ -1150,6 +1156,25 @@ private fun SettingsScreen(
                     Text("0.5배", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.weight(1f))
                     Text("2.0배", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("곡 전환 시 무음 줄이기", style = MaterialTheme.typography.titleSmall)
+                Text(
+                    "파일의 시작·끝에서 감지한 연속 무음만 최대 1.5초 줄입니다. 강의 중간의 침묵은 변경하지 않습니다.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(
+                    Modifier.fillMaxWidth().clickable {
+                        onSetReduceBoundarySilence(!reduceBoundarySilence)
+                    }.padding(vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(
+                        checked = reduceBoundarySilence,
+                        onCheckedChange = onSetReduceBoundarySilence,
+                    )
+                    Text("파일 경계 무음 줄이기", Modifier.padding(start = 8.dp))
                 }
                 Spacer(Modifier.height(16.dp))
                 Text("자동 끄기 타이머", style = MaterialTheme.typography.titleSmall)

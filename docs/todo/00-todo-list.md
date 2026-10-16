@@ -6,6 +6,7 @@
 
 - [ ] [재생 서비스 위치 저장 실제 기기 검증](./261016-playback-service-resume-device-validation.md) — 실제 분할 화면·재생 종료·잠금/알림/회전 회귀 확인
 - [ ] [자동 끄기 타이머 실제 기기 검증](./261016-sleep-timer-device-validation.md) — 백그라운드·반복 재생·서비스 복원 확인
+- [ ] [파일 경계 무음 줄이기 실제 기기 검증](./261016-boundary-silence-device-validation.md) — 형식별 경계 클리핑과 강의 내부 침묵 보존 확인
 
 새 TODO를 만들면 아래 형식으로 한 줄을 추가한다.
 
