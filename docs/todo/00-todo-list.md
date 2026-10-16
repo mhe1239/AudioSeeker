@@ -4,7 +4,7 @@
 
 현재 등록된 TODO:
 
-- [ ] [재생 서비스 위치 저장 실제 기기 검증](./261016-playback-service-resume-device-validation.md) — 백그라운드·작업 제거·서비스 재생성 뒤 위치 복원 확인
+- [ ] [재생 서비스 위치 저장 실제 기기 검증](./261016-playback-service-resume-device-validation.md) — 실제 분할 화면·재생 종료·잠금/알림/회전 회귀 확인
 
 새 TODO를 만들면 아래 형식으로 한 줄을 추가한다.
 
