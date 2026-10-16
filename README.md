@@ -1,7 +1,7 @@
 # AudioSeeker
 
 <p align="center">
-  <img src="audioseeker-icon-solid-teal-transparent.png" width="144" alt="AudioSeeker 앱 아이콘">
+  <img src="assets/branding/audioseeker-icon-solid-teal-transparent.png" width="144" alt="AudioSeeker 앱 아이콘">
 </p>
 
 **AudioSeeker**는 기기에 저장된 오디오 파일을 빠르게 찾고, 현재 보고 있는 폴더나 검색 결과를 그대로 재생 큐로 사용할 수 있는 Android 로컬 오디오 플레이어입니다. 스트리밍, 계정, 클라우드 동기화 없이 기기 안의 파일과 재생 흐름에 집중합니다.

@@ -8,6 +8,8 @@ AudioSeeker/
 ├── CLAUDE.md                         # AGENTS.md를 가리키는 보조 진입점
 ├── REQUIREMENTS.md                   # 확정된 제품 요구사항
 ├── design.md                         # 화면·테마 디자인 기준
+├── assets/
+│   └── branding/                     # README·배포용 브랜딩 아이콘 변형본
 ├── app/
 │   ├── build.gradle.kts              # 앱 모듈 의존성·Android 설정
 │   └── src/main/
