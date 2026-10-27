@@ -10,6 +10,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.SeekParameters
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 
@@ -81,6 +82,7 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true)
             .setSeekBackIncrementMs(DEFAULT_SEEK_INCREMENT_MS)
             .setSeekForwardIncrementMs(DEFAULT_SEEK_INCREMENT_MS)
+            .setSeekParameters(SeekParameters.EXACT)
             .build()
 
         player?.addListener(playerListener)
@@ -92,7 +94,7 @@ class PlaybackService : MediaSessionService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
-        player?.let(::persistPlaybackPosition)
+        player?.let { persistPlaybackPosition(it, synchronously = true) }
         super.onTaskRemoved(rootIntent)
     }
 
@@ -102,7 +104,7 @@ class PlaybackService : MediaSessionService() {
         preferences.unregisterOnSharedPreferenceChangeListener(preferenceListener)
         mediaSession?.run {
             player.removeListener(playerListener)
-            persistPlaybackPosition(player)
+            persistPlaybackPosition(player, synchronously = true)
             player.release()
             release()
         }
@@ -156,11 +158,21 @@ class PlaybackService : MediaSessionService() {
             ?.let { value -> SleepTimerOption.entries.firstOrNull { it.name == value } }
             ?: SleepTimerOption.OFF
 
-    private fun persistPlaybackPosition(player: Player) {
-        persistPlaybackPosition(player.currentMediaItem, player.currentPosition, player.duration)
+    private fun persistPlaybackPosition(player: Player, synchronously: Boolean = false) {
+        persistPlaybackPosition(
+            mediaItem = player.currentMediaItem,
+            positionMs = player.currentPosition,
+            durationMs = player.duration,
+            synchronously = synchronously,
+        )
     }
 
-    private fun persistPlaybackPosition(mediaItem: MediaItem?, positionMs: Long, durationMs: Long) {
+    private fun persistPlaybackPosition(
+        mediaItem: MediaItem?,
+        positionMs: Long,
+        durationMs: Long,
+        synchronously: Boolean = false,
+    ) {
         val trackId = mediaItem?.mediaId?.toLongOrNull() ?: return
         val position = positionMs.coerceAtLeast(0L)
         val editor = preferences.edit()
@@ -169,7 +181,7 @@ class PlaybackService : MediaSessionService() {
         } else {
             editor.putLong(KEY_PLAYBACK_POSITION_PREFIX + trackId, position)
         }
-        editor.apply()
+        if (synchronously) editor.commit() else editor.apply()
     }
 
     private companion object {

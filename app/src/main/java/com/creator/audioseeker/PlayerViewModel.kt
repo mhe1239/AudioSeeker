@@ -208,6 +208,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    /** Saves the player's own position before the activity becomes obscured or stops. */
+    fun persistCurrentPlaybackPosition() {
+        val mediaController = controller ?: return
+        val trackId = mediaController.currentMediaItem?.mediaId?.toLongOrNull() ?: return
+        val positionMs = mediaController.currentPosition.coerceAtLeast(0L)
+        val editor = preferences.edit()
+        if (mediaController.duration != C.TIME_UNSET &&
+            mediaController.duration > 0L &&
+            positionMs >= mediaController.duration - RESUME_END_THRESHOLD_MS
+        ) {
+            editor.remove(KEY_PLAYBACK_POSITION_PREFIX + trackId)
+        } else {
+            editor.putLong(KEY_PLAYBACK_POSITION_PREFIX + trackId, positionMs)
+        }
+        editor.commit()
+        playerState = playerState.copy(currentPositionMs = positionMs)
+    }
+
     fun seekTo(positionMs: Long) {
         if (!playerState.controlsLocked) {
             val targetPositionMs = positionMs.coerceAtLeast(0L)
@@ -725,6 +743,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     companion object {
         const val DEFAULT_SKIP_SECONDS = 10
+        const val RESUME_END_THRESHOLD_MS = 1_000L
         const val DEFAULT_PLAYBACK_SPEED = 1f
         private const val LOCK_SCREEN_ARTWORK_SIZE = 512
         private const val MIN_PLAYBACK_SPEED = 0.5f

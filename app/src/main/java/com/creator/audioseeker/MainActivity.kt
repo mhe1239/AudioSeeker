@@ -23,6 +23,7 @@ import com.creator.audioseeker.ui.theme.AudioSeekerTheme
 
 class MainActivity : ComponentActivity() {
     private var pendingShortcutAction by mutableStateOf<String?>(null)
+    private var playerViewModel: PlayerViewModel? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
         pendingShortcutAction = intent?.action
         setContent {
             val playerViewModel: PlayerViewModel = viewModel()
+            this@MainActivity.playerViewModel = playerViewModel
             var hasAudioPermission by remember { mutableStateOf(hasAudioPermission()) }
             val audioPermissionLauncher = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
@@ -103,6 +105,16 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         pendingShortcutAction = intent.action
+    }
+
+    override fun onPause() {
+        playerViewModel?.persistCurrentPlaybackPosition()
+        super.onPause()
+    }
+
+    override fun onStop() {
+        playerViewModel?.persistCurrentPlaybackPosition()
+        super.onStop()
     }
 
     private fun hasAudioPermission(): Boolean =
