@@ -405,7 +405,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val duration = mediaController.duration.let { if (it == C.TIME_UNSET) 0L else it.coerceAtLeast(0L) }
         val reportedPosition = mediaController.currentPosition.coerceAtLeast(0L)
         val shouldKeepSavedPosition =
-            mediaController.playbackState != Player.STATE_READY &&
+            !mediaController.isPlaying &&
+                mediaController.playbackState != Player.STATE_READY &&
                 currentTrackId != null &&
                 currentTrackId == playerState.currentTrackId &&
                 playerState.currentPositionMs > 0L
