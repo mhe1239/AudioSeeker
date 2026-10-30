@@ -154,6 +154,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 }
                 syncPlayerState()
                 startShortcutPlaybackIfReady()
+                restoreLastTrackIfReady()
             },
             ContextCompat.getMainExecutor(app),
         )
@@ -171,6 +172,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 tracks = loadedTracks
                 classifyNewTracks(loadedTracks)
                 startShortcutPlaybackIfReady()
+                restoreLastTrackIfReady()
             }
         }
     }
@@ -445,6 +447,25 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val track = tracks.firstOrNull { it.id == lastPlayedTrackId } ?: tracks.first()
         shortcutPlaybackRequested = false
         playTrack(track, tracks)
+    }
+
+    private fun restoreLastTrackIfReady() {
+        val mediaController = controller ?: return
+        if (mediaController.currentMediaItem != null || tracks.isEmpty()) return
+
+        val lastPlayedTrackId = preferences.getLong(KEY_LAST_PLAYED_TRACK_ID, NO_TRACK_ID)
+        val queue = tracks.distinctBy { it.id }
+        val index = queue.indexOfFirst { it.id == lastPlayedTrackId }
+        if (index < 0) return
+
+        val track = queue[index]
+        activeQueue = queue
+        mediaController.shuffleModeEnabled = playerState.shuffleEnabled
+        mediaController.repeatMode = playerState.repeatMode.toMedia3RepeatMode()
+        mediaController.setMediaItems(queue.map(::createMediaItem), index, savedPlaybackPositionMs(track.id))
+        mediaController.prepare()
+        requestEmbeddedArtwork(track)
+        prefetchFollowingBoundarySilenceClip(track.id)
     }
 
     private fun startTrackPlayback(track: AudioTrack, queue: List<AudioTrack>, index: Int) {
