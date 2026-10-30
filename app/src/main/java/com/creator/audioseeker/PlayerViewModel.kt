@@ -198,6 +198,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
     fun playLastTrack() {
         if (playerState.controlsLocked) return
+        if (controller?.isPlaying == true) return
         shortcutPlaybackRequested = true
         startShortcutPlaybackIfReady()
     }
@@ -417,7 +418,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun startShortcutPlaybackIfReady() {
-        if (!shortcutPlaybackRequested || playerState.controlsLocked || controller == null) return
+        val mediaController = controller ?: return
+        if (!shortcutPlaybackRequested || playerState.controlsLocked) return
+        if (mediaController.isPlaying) {
+            shortcutPlaybackRequested = false
+            return
+        }
 
         if (tracks.isEmpty()) {
             if (!shortcutTrackLoadInProgress) {
